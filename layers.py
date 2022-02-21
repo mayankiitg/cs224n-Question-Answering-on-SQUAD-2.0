@@ -53,7 +53,7 @@ class WordAndCharEmbedding(nn.Module):
         super(Embedding, self).__init__()
         self.drop_prob = drop_prob
         self.word_embed = nn.Embedding.from_pretrained(word_vectors)
-        self.char_embed = CharEmbedding(char_vectors, n_filters=hidden_size/2, kernel_size=5)
+        self.char_embed = CharEmbedding(char_vectors, n_filters=hidden_size/2, kernel_size=3, drop_prob=drop_prob)
         self.proj = nn.Linear(word_vectors.size(1), hidden_size/2, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
 
@@ -63,7 +63,7 @@ class WordAndCharEmbedding(nn.Module):
         word_emb = self.proj(word_emb)  # (batch_size, seq_len, hidden_size//2)
 
         char_emb = self.char_embed(char_idxs)   # (batch_size, seq_len, hidden_size//2)
-        char_emb = F.dropout(char_emb, self.drop_prob, self.training) #ToDo: Is this dropout required and at the right time in the model?
+        # char_emb = F.dropout(char_emb, self.drop_prob, self.training) #Dropout is done in CNN layer
 
         emb = torch.cat(word_emb, char_emb, dim=2)  # (batch_size, seq_len, hidden_size)
         assert(emb.size()[2] == word_emb.size()[2] + char_emb.size()[2])
@@ -80,16 +80,17 @@ class CharEmbedding(nn.Module):
     Args:
         char_vectors (torch.Tensor): Pre-trained char vectors.
     """
-    def __init__(self, char_vectors, n_filters, kernel_size):
+    def __init__(self, char_vectors, n_filters, kernel_size, drop_prob):
         super(Embedding, self).__init__()
         
         self.n_filters = n_filters
+        self.drop_prob = drop_prob
 
-        self.char_embed = nn.Embedding.from_pretrained(char_vectors)
+        self.char_embed = nn.Embedding.from_pretrained(char_vectors) # do we want to freeze char embeddings as well?
         # we want hidden_size//2 = 50 filters.
-        # width of each filter is 5, so CNN will iterate over 5 char long substrings, 1 by 1 extracting some features.
+        # width of each filter is kernel_size, so CNN will iterate over 3 char long substrings, 1 by 1 extracting some features.
         # height of the filter is: Length of char embedding (char_embed_size)
-        # Filter size: (5, char_embed_size)
+        # Filter size: (kernel_size, char_embed_size)
         # Each filter will be applied for a word, and will produce a vector 
         # Then Max pool over time.
         self.conv1 = nn.Sequential(
@@ -97,8 +98,10 @@ class CharEmbedding(nn.Module):
                 in_channels=char_vectors.size(1),
                 out_channels=n_filters,
                 kernel_size=kernel_size,
-                padding=0,
             ),
+            nn.ReLU(),
+            nn.Dropout(drop_prob),
+            nn.BatchNorm1d(num_features=n_filters), # some people claimed it helped them.
             nn.AdaptiveMaxPool1d(1), #We want to max pool on last dimension (i.e. over ther char sequence, along the width of the word) and we want to pick 1 max value.
         )
 
