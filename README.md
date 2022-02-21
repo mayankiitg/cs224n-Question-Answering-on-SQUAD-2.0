@@ -2,7 +2,7 @@
 
 # References:
 1. Official Bidaf implementation in [TensorFlow](https://github.com/allenai/bi-att-flow/blob/49004549e9a88b78c359b31481afa7792dbb3f4a/basic/model.py#L128) 
-2. char CNN: [blogpost](https://towardsdatascience.com/the-definitive-guide-to-bidaf-part-2-word-embedding-character-embedding-and-contextual-c151fc4f05bb), slides for some [course](https://nlp.seas.harvard.edu/slides/aaai16.pdf)
+2. char CNN: [blogpost](https://towardsdatascience.com/the-definitive-guide-to-bidaf-part-2-word-embedding-character-embedding-and-contextual-c151fc4f05bb), slides from some [course](https://nlp.seas.harvard.edu/slides/aaai16.pdf)
 
 # Things to implement:
 1. include character embeddings
