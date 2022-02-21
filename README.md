@@ -1,5 +1,21 @@
 # CS224N default final project (2022 IID SQuAD track)
 
+# References:
+1. Official Bidaf implementation in [TensorFlow](https://github.com/allenai/bi-att-flow/blob/49004549e9a88b78c359b31481afa7792dbb3f4a/basic/model.py#L128) 
+2. char CNN: [blogpost](https://towardsdatascience.com/the-definitive-guide-to-bidaf-part-2-word-embedding-character-embedding-and-contextual-c151fc4f05bb), slides for some [course](https://nlp.seas.harvard.edu/slides/aaai16.pdf)
+
+# Things to implement:
+1. include character embeddings
+2. Co-Attention module implementation, and see if it produces better result.
+3. multi layer co-attention.
+4. Self attention (R-Net)
+5. Data augmentation, in case we have many parameters.
+6. Ensembling some models For final submission (Not sure, exactly how this works)
+
+# Progress:
+1. Setup done, baseline results are obtained, and they look similar to the one present in handout.
+2. Char embedding implementation is done. -> Test & verify is pending.
+
 ## Setup
 
 1. Make sure you have [Miniconda](https://conda.io/docs/user-guide/install/index.html#regular-installation) installed
