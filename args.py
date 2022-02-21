@@ -134,6 +134,10 @@ def get_train_args():
                         type=float,
                         default=0.999,
                         help='Decay rate for exponential moving average of parameters.')
+    parser.add_argument('--use_char_emb',
+                    type=bool,
+                    default=True,
+                    help='Whether use character embeddings along with word embeddings in the model.')
 
     args = parser.parse_args()
 
