@@ -30,9 +30,10 @@ class BiDAF(nn.Module):
         hidden_size (int): Number of features in the hidden state at each layer.
         drop_prob (float): Dropout probability.
     """
-    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, drop_prob=0.):
+    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, drop_prob=0.):
         super(BiDAF, self).__init__()
         print("initializing Bidaf!")
+        self.use_dynamic_coattention = use_dynamic_coattention
         if use_char_emb:
             print("Using character embeddings")
             self.emb = layers.WordAndCharEmbedding(word_vectors=word_vectors,
@@ -48,17 +49,29 @@ class BiDAF(nn.Module):
                                      hidden_size=hidden_size,
                                      num_layers=1,
                                      drop_prob=drop_prob)
+        if self.use_dynamic_coattention:
+            print("Using dynamic coattention!")
+            self.att = layers.CoAttention(hidden_size=2 * hidden_size,
+                                             drop_prob=drop_prob)
 
-        self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
+            self.mod = layers.RNNEncoder(input_size=12 * hidden_size,
+                                         hidden_size=hidden_size,
+                                         num_layers=2,
                                          drop_prob=drop_prob)
 
-        self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
-                                     hidden_size=hidden_size,
-                                     num_layers=2,
-                                     drop_prob=drop_prob)
+            self.out = layers.CoAttentionOutput(hidden_size=hidden_size,
+                                          drop_prob=drop_prob)
+        else:
+            self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
+                                             drop_prob=drop_prob)
 
-        self.out = layers.BiDAFOutput(hidden_size=hidden_size,
-                                      drop_prob=drop_prob)
+            self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
+                                         hidden_size=hidden_size,
+                                         num_layers=2,
+                                         drop_prob=drop_prob)
+
+            self.out = layers.BiDAFOutput(hidden_size=hidden_size,
+                                          drop_prob=drop_prob)
 
     def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):
         # cw_idxs: (max__context_len, )

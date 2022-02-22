@@ -246,3 +246,7 @@ def add_train_test_args(parser):
                     type=bool,
                     default=True,
                     help='Whether use character embeddings along with word embeddings in the model.')
+    parser.add_argument('--use_dynamic_coattention',
+                    type=bool,
+                    default=True,
+                    help='Whether use dynamic coattention in the model.')
