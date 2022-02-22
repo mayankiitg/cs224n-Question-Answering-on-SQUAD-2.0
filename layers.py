@@ -50,7 +50,7 @@ class WordAndCharEmbedding(nn.Module):
         drop_prob (float): Probability of zero-ing out activations
     """
     def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob):
-        super(Embedding, self).__init__()
+        super(WordAndCharEmbedding, self).__init__()
         n_filters = hidden_size
         self.drop_prob = drop_prob
         self.word_embed = nn.Embedding.from_pretrained(word_vectors)
@@ -66,7 +66,7 @@ class WordAndCharEmbedding(nn.Module):
         char_emb = self.char_embed(char_idxs)   # (batch_size, seq_len, hidden_size//2)
         # char_emb = F.dropout(char_emb, self.drop_prob, self.training) #Dropout is done in CNN layer
 
-        emb = torch.cat(word_emb, char_emb, dim=2)  # (batch_size, seq_len, 350)
+        emb = torch.cat((word_emb, char_emb), dim=2)  # (batch_size, seq_len, 350)
         assert(emb.size()[2] == word_emb.size()[2] + char_emb.size()[2])
 
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
@@ -84,7 +84,7 @@ class CharEmbedding(nn.Module):
         char_vectors (torch.Tensor): Pre-trained char vectors.
     """
     def __init__(self, char_vectors, n_filters, kernel_size, drop_prob):
-        super(Embedding, self).__init__()
+        super(CharEmbedding, self).__init__()
         
         self.n_filters = n_filters
         self.drop_prob = drop_prob
@@ -115,7 +115,10 @@ class CharEmbedding(nn.Module):
         (batch_size, seq_len, word_len) = x.shape # (batch_size, seq_len, word_len)
 
         y = x.reshape(x.shape[0]*x.shape[1], -1) # (batch_size * seq_len, word_len)
-        emb = self.char_embed(x)   # (batch_size * seq_len, word_len, char_embed_size)
+        
+        emb = self.char_embed(y)   # (batch_size * seq_len, word_len, char_embed_size)
+        assert (emb.shape == (batch_size*seq_len, word_len, 64))
+
         emb = F.dropout(emb, self.drop_prob, self.training)
 
         emb = torch.transpose(emb, 1, 2)  # (batch_size * seq_len, char_embed_size, word_len)

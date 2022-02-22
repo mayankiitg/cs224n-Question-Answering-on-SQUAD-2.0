@@ -50,8 +50,16 @@ def main(args):
     model = BiDAF(word_vectors=word_vectors,
                   char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
-                  drop_prob=args.drop_prob)
+                  drop_prob=args.drop_prob,
+                  use_char_emb=args.use_char_emb)
+    
     model = nn.DataParallel(model, args.gpu_ids)
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    log.info(model)
+    log.info(f"Total trainable params: {count_parameters(model)}")
+
     if args.load_path:
         log.info(f'Loading checkpoint from {args.load_path}...')
         model, step = util.load_model(model, args.load_path, args.gpu_ids)
