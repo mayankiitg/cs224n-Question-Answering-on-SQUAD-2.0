@@ -31,9 +31,14 @@
 
 # Results
 
-| Name            | Params  | HyperParams  | Best F1 | Best EM | AvNA |
-| :---:           |     :-: | :-:          | :-:     | :-:     | :-:  | 
-| Seconds         | 301 | 283 | | | |
+| Name            | Params  | HyperParams  | Best F1 | Best EM | AvNA | Dev NLL|
+| :---:           |     :-: | :-:          | :-:     | :-:     | :-:  |  :-: |
+| bidaf-baseline-03         | Baseline params | LR 0.5, drop_prob 0.2 | 61.29 | 57.84| 68.01| 3.08|
+| bidaf-char-01         | conv1D with filterSize: 5, out_channels=50, words embedding projected to 50, chars embd of size 50 concat together | LR 0.5, drop_prob 0.2 | 60.95 | 57.79| 67.57| 2.99|
+| bidaf-char-02         | conv1D with filterSize: 3, out_channels=50, relu,batchnorm, dropout, word_emb projected to 50, chars embd of size 50 concat together | LR 0.5, drop_prob 0.2 | 61.87 | 58.39| 67.90| 2.97|
+| bidaf-char-03         | conv1D with filterSize: 3, out_channels=100, relu,batchnorm, words_emb + char_emb conat then projected to 100 | LR 0.5, drop_prob 0.2 |  | | | |
+
+
 
 ## Setup
 
