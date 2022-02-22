@@ -371,10 +371,10 @@ class CoAttention(nn.Module):
 
         # Co-attention stuff
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
-        acoat = torch.bmm(s1coat, qprime)
+        acoat = torch.bmm(scoat1, qprime)
         # (bs, q_len, c_len) x (bs, c_len, hid_size) => (bs, q_len, hid_size)
-        bcoat = torch.bmm(s2coat.transpose(1, 2), c)
-        scoat = torch.bmm(s1coat, bcoat)
+        bcoat = torch.bmm(scoat2.transpose(1, 2), c)
+        scoat = torch.bmm(scoat1, bcoat)
 
         # Merge BiDAF and Coattention
         x = torch.cat([c, a, c * a, c * b, scoat, acoat], dim=2)  # (bs, c_len, 6 * hid_size)
@@ -420,7 +420,7 @@ class CoAttentionOutput(nn.Module):
         drop_prob (float): Probability of zero-ing out activations.
     """
     def __init__(self, hidden_size, drop_prob):
-        super(BiDAFOutput, self).__init__()
+        super().__init__()
         self.att_linear_1 = nn.Linear(12 * hidden_size, 1)
         self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
 

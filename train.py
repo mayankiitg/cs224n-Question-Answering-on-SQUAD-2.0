@@ -51,8 +51,9 @@ def main(args):
                   char_vectors=char_vectors,
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob,
-                  use_char_emb=args.use_char_emb)
-    
+                  use_char_emb=args.use_char_emb,
+                  use_dynamic_coattention = args.use_dynamic_coattention)
+
     model = nn.DataParallel(model, args.gpu_ids)
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
