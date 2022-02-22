@@ -20,12 +20,13 @@
 1. bidaf-baseline-03: Its the baseline Bidaf model.
 2. bidaf-char-02: its the first attempt at char embeddings. kernel size:5, #Filters: 50, no Relu,BatchNorm,Dropout inside characterEmbed layer. word embeddings are getting projected to 50, char embeddings are coming as 50, concat and return.
 3. bidaf-char-03: some changes on bidaf-char-02, kernel_size: 3, Relu, Dropout,BatchNorm in the Sequential() for character embed layer.
-4. (ToDo) bidaf-char-04: Experiments with how to mix & match word & Char embeddings:
+4. bidaf-char-04: 100 filters, filter size: 3, 100 dimension char embedding output, along with 300 dim word embeddings, getting projected to 100 dim together. Dropout just after reading the pretrained word and char embeddings.
+5. (ToDo) bidaf-char-04: Experiments with how to mix & match word & Char embeddings:
     4.1 keep word embeddings 100 size intact, add char embedding 50 dimension. total 150 dimension from embedding layer. (or we can go higher)
     4.2 keep word, char embedding together then project to 100 then return. 
     4.3 
-5.(ToDo) HyperParameter Tuning for bidaf-char: mainly, dropoutprob: 0.15, LR: 0.4, 0.6 (or with exponential decay, using the lambda function, do we need it?)
-6. (ToDo) Char-CNN Parameter tuning: (#Filters, kernel_size) we can try combining some filters for 3, 5 kernel size, and see, if it makes any difference.
+6.(ToDo) HyperParameter Tuning for bidaf-char: mainly, dropoutprob: 0.15, LR: 0.4, 0.6 (or with exponential decay, using the lambda function, do we need it?)
+7. (ToDo) Char-CNN Parameter tuning: (#Filters, kernel_size) we can try combining some filters for 3, 5 kernel size, and see, if it makes any difference.
 
 
 # Results
