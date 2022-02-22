@@ -51,22 +51,25 @@ class WordAndCharEmbedding(nn.Module):
     """
     def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob):
         super(Embedding, self).__init__()
+        n_filters = hidden_size
         self.drop_prob = drop_prob
         self.word_embed = nn.Embedding.from_pretrained(word_vectors)
-        self.char_embed = CharEmbedding(char_vectors, n_filters=hidden_size/2, kernel_size=3, drop_prob=drop_prob)
-        self.proj = nn.Linear(word_vectors.size(1), hidden_size/2, bias=False)
+        self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob)
+        self.proj = nn.Linear(word_vectors.size(1)+n_filters, hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
 
     def forward(self, word_idxs, char_idxs):
         word_emb = self.word_embed(word_idxs)   # (batch_size, seq_len, embed_size)
         word_emb = F.dropout(word_emb, self.drop_prob, self.training)
-        word_emb = self.proj(word_emb)  # (batch_size, seq_len, hidden_size//2)
+        # word_emb = self.proj(word_emb)  # (batch_size, seq_len, hidden_size//2)
 
         char_emb = self.char_embed(char_idxs)   # (batch_size, seq_len, hidden_size//2)
         # char_emb = F.dropout(char_emb, self.drop_prob, self.training) #Dropout is done in CNN layer
 
-        emb = torch.cat(word_emb, char_emb, dim=2)  # (batch_size, seq_len, hidden_size)
+        emb = torch.cat(word_emb, char_emb, dim=2)  # (batch_size, seq_len, 350)
         assert(emb.size()[2] == word_emb.size()[2] + char_emb.size()[2])
+
+        emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
 
         # emb = F.dropout(emb, self.drop_prob, self.training) # ToDo: Should we apply dropout collectively here?
         
@@ -87,6 +90,7 @@ class CharEmbedding(nn.Module):
         self.drop_prob = drop_prob
 
         self.char_embed = nn.Embedding.from_pretrained(char_vectors) # do we want to freeze char embeddings as well?
+
         # we want hidden_size//2 = 50 filters.
         # width of each filter is kernel_size, so CNN will iterate over 3 char long substrings, 1 by 1 extracting some features.
         # height of the filter is: Length of char embedding (char_embed_size)
@@ -100,7 +104,7 @@ class CharEmbedding(nn.Module):
                 kernel_size=kernel_size,
             ),
             nn.ReLU(),
-            nn.Dropout(drop_prob),
+            # nn.Dropout(drop_prob),
             nn.BatchNorm1d(num_features=n_filters), # some people claimed it helped them.
             nn.AdaptiveMaxPool1d(1), #We want to max pool on last dimension (i.e. over ther char sequence, along the width of the word) and we want to pick 1 max value.
         )
@@ -112,6 +116,8 @@ class CharEmbedding(nn.Module):
 
         y = x.reshape(x.shape[0]*x.shape[1], -1) # (batch_size * seq_len, word_len)
         emb = self.char_embed(x)   # (batch_size * seq_len, word_len, char_embed_size)
+        emb = F.dropout(emb, self.drop_prob, self.training)
+
         emb = torch.transpose(emb, 1, 2)  # (batch_size * seq_len, char_embed_size, word_len)
 
         emb: torch.Tensor = self.conv1(emb)   # (batch_size * seq_len, out_channels=50, 1)
