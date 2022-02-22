@@ -30,14 +30,109 @@ class Embedding(nn.Module):
         self.proj = nn.Linear(word_vectors.size(1), hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
 
-    def forward(self, x):
-        emb = self.embed(x)   # (batch_size, seq_len, embed_size)
+    def forward(self, word_idxs, char_idxs):
+        emb = self.embed(word_idxs)   # (batch_size, seq_len, embed_size)
         emb = F.dropout(emb, self.drop_prob, self.training)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
 
         return emb
 
+class WordAndCharEmbedding(nn.Module):
+    """Embedding layer used by BiDAF, with the character-level component.
+
+    Word-level embeddings are further refined using a 2-layer Highway Encoder
+    (see `HighwayEncoder` class for details).
+
+    Args:
+        word_vectors (torch.Tensor): Pre-trained word vectors.
+        hidden_size (int): Size of hidden activations.
+        drop_prob (float): Probability of zero-ing out activations
+    """
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob):
+        super(WordAndCharEmbedding, self).__init__()
+        n_filters = hidden_size
+        self.drop_prob = drop_prob
+        self.word_embed = nn.Embedding.from_pretrained(word_vectors)
+        self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob)
+        self.proj = nn.Linear(word_vectors.size(1)+n_filters, hidden_size, bias=False)
+        self.hwy = HighwayEncoder(2, hidden_size)
+
+    def forward(self, word_idxs, char_idxs):
+        word_emb = self.word_embed(word_idxs)   # (batch_size, seq_len, embed_size)
+        word_emb = F.dropout(word_emb, self.drop_prob, self.training)
+        # word_emb = self.proj(word_emb)  # (batch_size, seq_len, hidden_size//2)
+
+        char_emb = self.char_embed(char_idxs)   # (batch_size, seq_len, hidden_size//2)
+        # char_emb = F.dropout(char_emb, self.drop_prob, self.training) #Dropout is done in CNN layer
+
+        emb = torch.cat((word_emb, char_emb), dim=2)  # (batch_size, seq_len, 350)
+        assert(emb.size()[2] == word_emb.size()[2] + char_emb.size()[2])
+
+        emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
+
+        # emb = F.dropout(emb, self.drop_prob, self.training) # ToDo: Should we apply dropout collectively here?
+        
+        emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
+
+        return emb
+
+class CharEmbedding(nn.Module):
+    """Embedding layer used by BiDAF, for character-level embedding using 1d-CNN.
+
+    Args:
+        char_vectors (torch.Tensor): Pre-trained char vectors.
+    """
+    def __init__(self, char_vectors, n_filters, kernel_size, drop_prob):
+        super(CharEmbedding, self).__init__()
+        
+        self.n_filters = n_filters
+        self.drop_prob = drop_prob
+
+        self.char_embed = nn.Embedding.from_pretrained(char_vectors) # do we want to freeze char embeddings as well?
+
+        # we want hidden_size//2 = 50 filters.
+        # width of each filter is kernel_size, so CNN will iterate over 3 char long substrings, 1 by 1 extracting some features.
+        # height of the filter is: Length of char embedding (char_embed_size)
+        # Filter size: (kernel_size, char_embed_size)
+        # Each filter will be applied for a word, and will produce a vector 
+        # Then Max pool over time.
+        self.conv1 = nn.Sequential(
+            nn.Conv1d(
+                in_channels=char_vectors.size(1),
+                out_channels=n_filters,
+                kernel_size=kernel_size,
+            ),
+            nn.ReLU(),
+            # nn.Dropout(drop_prob),
+            nn.BatchNorm1d(num_features=n_filters), # some people claimed it helped them.
+            nn.AdaptiveMaxPool1d(1), #We want to max pool on last dimension (i.e. over ther char sequence, along the width of the word) and we want to pick 1 max value.
+        )
+
+    def forward(self, x):
+        #ToDo: Are Reshapes costly operations? Looksmlike they copy objects, keeping old ones around. maybe we should use Views?
+
+        (batch_size, seq_len, word_len) = x.shape # (batch_size, seq_len, word_len)
+
+        y = x.reshape(x.shape[0]*x.shape[1], -1) # (batch_size * seq_len, word_len)
+        
+        emb = self.char_embed(y)   # (batch_size * seq_len, word_len, char_embed_size)
+        assert (emb.shape == (batch_size*seq_len, word_len, 64))
+
+        emb = F.dropout(emb, self.drop_prob, self.training)
+
+        emb = torch.transpose(emb, 1, 2)  # (batch_size * seq_len, char_embed_size, word_len)
+
+        emb: torch.Tensor = self.conv1(emb)   # (batch_size * seq_len, out_channels=50, 1)
+        # Step 1: Conv1d filters: shape: (batch_size * seq_len, out_channels=50, word_len-4) as filter width is 5, with 1 stride, so that dimesion will be word_len-4
+        # Step 2: MaxPool1D across last dimension. so shape will be: (batch_size * seq_len, out_channels=50, 1)
+        
+        emb.squeeze(-1) # (batch_size * seq_len, out_channels=50)
+        emb = emb.reshape(x.shape[0], x.shape[1], -1) # (batch_size, seq_len, out_channels=50)
+        
+        assert(emb.shape == ((batch_size, seq_len, self.n_filters)))
+
+        return emb
 
 class HighwayEncoder(nn.Module):
     """Encode an input sequence using a highway network.
