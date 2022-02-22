@@ -55,7 +55,7 @@ class WordAndCharEmbedding(nn.Module):
         self.drop_prob = drop_prob
         self.word_embed = nn.Embedding.from_pretrained(word_vectors)
         self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob)
-        self.proj = nn.Linear(word_vectors.size(1)+n_filters, hidden_size, bias=False)
+        self.proj = nn.Linear(word_vectors.size(1)+2*n_filters, hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
 
     def forward(self, word_idxs, char_idxs):
@@ -109,6 +109,18 @@ class CharEmbedding(nn.Module):
             nn.AdaptiveMaxPool1d(1), #We want to max pool on last dimension (i.e. over ther char sequence, along the width of the word) and we want to pick 1 max value.
         )
 
+        self.conv2 = nn.Sequential(
+            nn.Conv1d(
+                in_channels=char_vectors.size(1),
+                out_channels=n_filters,
+                kernel_size=5,
+            ),
+            nn.ReLU(),
+            # nn.Dropout(drop_prob),
+            nn.BatchNorm1d(num_features=n_filters), # some people claimed it helped them.
+            nn.AdaptiveMaxPool1d(1), #We want to max pool on last dimension (i.e. over ther char sequence, along the width of the word) and we want to pick 1 max value.
+        )
+
     def forward(self, x):
         #ToDo: Are Reshapes costly operations? Looksmlike they copy objects, keeping old ones around. maybe we should use Views?
 
@@ -123,14 +135,20 @@ class CharEmbedding(nn.Module):
 
         emb = torch.transpose(emb, 1, 2)  # (batch_size * seq_len, char_embed_size, word_len)
 
-        emb: torch.Tensor = self.conv1(emb)   # (batch_size * seq_len, out_channels=50, 1)
+        emb1: torch.Tensor = self.conv1(emb)   # (batch_size * seq_len, out_channels=50, 1)
         # Step 1: Conv1d filters: shape: (batch_size * seq_len, out_channels=50, word_len-4) as filter width is 5, with 1 stride, so that dimesion will be word_len-4
         # Step 2: MaxPool1D across last dimension. so shape will be: (batch_size * seq_len, out_channels=50, 1)
         
-        emb.squeeze(-1) # (batch_size * seq_len, out_channels=50)
-        emb = emb.reshape(x.shape[0], x.shape[1], -1) # (batch_size, seq_len, out_channels=50)
-        
-        assert(emb.shape == ((batch_size, seq_len, self.n_filters)))
+        emb1.squeeze(-1) # (batch_size * seq_len, out_channels=50)
+        emb1 = emb1.reshape(x.shape[0], x.shape[1], -1) # (batch_size, seq_len, out_channels=50)
+        assert(emb1.shape == ((batch_size, seq_len, self.n_filters)))
+
+        emb2: torch.Tensor = self.conv2(emb)
+        emb2.squeeze(-1) # (batch_size * seq_len, out_channels=50)
+        emb2 = emb2.reshape(x.shape[0], x.shape[1], -1) # (batch_size, seq_len, out_channels=50)
+        assert(emb2.shape == ((batch_size, seq_len, self.n_filters)))
+
+        emb = torch.cat((emb1, emb2), dim = 2)
 
         return emb
 
