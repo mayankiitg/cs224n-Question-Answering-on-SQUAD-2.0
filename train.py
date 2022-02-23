@@ -52,7 +52,8 @@ def main(args):
                   hidden_size=args.hidden_size,
                   drop_prob=args.drop_prob,
                   use_char_emb=args.use_char_emb,
-                  use_dynamic_coattention = args.use_dynamic_coattention)
+                  use_dynamic_coattention = args.use_dynamic_coattention,
+                  use_self_attention = args.use_self_attention)
 
     model = nn.DataParallel(model, args.gpu_ids)
     def count_parameters(model):
