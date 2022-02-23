@@ -61,6 +61,18 @@ class BiDAF(nn.Module):
 
             self.out = layers.CoAttentionOutput(hidden_size=hidden_size,
                                           drop_prob=drop_prob)
+        elif self.use_self_attention:
+            print("Using passage self-attention!")
+            self.att = layers.SelfAttention(hidden_size=2 * hidden_size,
+                                             drop_prob=drop_prob)
+
+            self.mod = layers.RNNEncoder(input_size=12 * hidden_size,
+                                         hidden_size=hidden_size,
+                                         num_layers=2,
+                                         drop_prob=drop_prob)
+
+            self.out = layers.SelfAttentionOutput(hidden_size=hidden_size,
+                                          drop_prob=drop_prob)
         else:
             self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
                                              drop_prob=drop_prob)

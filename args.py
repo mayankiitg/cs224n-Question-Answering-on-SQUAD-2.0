@@ -250,3 +250,7 @@ def add_train_test_args(parser):
                     type=bool,
                     default=True,
                     help='Whether use dynamic coattention in the model.')
+    parser.add_argument('--use_self_attention',
+                    type=bool,
+                    default=True,
+                    help='Whether use self attention in the model.')
