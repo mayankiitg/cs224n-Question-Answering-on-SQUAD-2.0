@@ -36,8 +36,8 @@
 | bidaf-baseline-03         | Baseline params | LR 0.5, drop_prob 0.2 | 61.29 | 57.84| 68.01| 3.08|
 | bidaf-char-01         | conv1D with filterSize: 3, out_channels=100, relu,batchnorm, dropout, char_emb + word_emb projected to 100  | LR 0.5, drop_prob 0.2 | 65.64 | 62.58| 71.90| 2.64|
 | bidaf-char-02         | conv1D with filterSize: 3,5 out_channels=100+100, relu,batchnorm, dropout, word_emb + char_emb projected to 100| LR 0.5, drop_prob 0.2 | 67.37 | 64.22| 72.88| 2.59|   
-| bidaf-char01-coattention (baseline-04)         | char-emb + coattention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  66.81 | 63.27 | 72.90 | 2.67 |
-| bidaf-char01-coattention (coattention-03)         | coattention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  61.99 | 58.23 | 69.10 | 3.12 |
+| bidaf-char01-coattention (baseline-04)         | baseline + char-emb + coattention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  66.81 | 63.27 | 72.90 | 2.67 |
+| bidaf-coattention (coattention-03)         | baseline + coattention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  61.99 | 58.23 | 69.10 | 3.12 |
 
 
 
