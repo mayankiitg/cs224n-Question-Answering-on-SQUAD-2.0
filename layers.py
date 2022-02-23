@@ -377,7 +377,7 @@ class CoAttention(nn.Module):
         scoat = torch.bmm(scoat1, bcoat)
 
         # Merge BiDAF and Coattention
-        x = torch.cat([c, a, c * a, c * b, scoat, acoat, scoat*acoat], dim=2)  # (bs, c_len, 6 * hid_size)
+        x = torch.cat([c, a, c * a, c * b, scoat, acoat], dim=2)  # (bs, c_len, 6 * hid_size)
 
         return x
 
