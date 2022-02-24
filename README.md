@@ -39,6 +39,7 @@
 | bidaf-char01-coattention (baseline-04)         | baseline + char-emb + coattention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  66.81 | 63.27 | 72.90 | 2.67 |
 | bidaf-coattention (coattention-05)         | baseline + coattention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  61.89 | 58.54 | 68.53 | 3.02 |
 | bidaf-selfattention (selfattV2-01)         | baseline + self-attention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  61.49 | 58.36 | 68.19 | 3.04 |
+| bidaf-coSelfattention (coSelfAtt-01)         | baseline + coattention plus self-attention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  62.84 | 59.27 | 69.53 | 2.98 |
 
 
 
