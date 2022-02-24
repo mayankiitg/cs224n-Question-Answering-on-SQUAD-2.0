@@ -731,8 +731,8 @@ class Attention(nn.Module):
         self.drop_prob = drop_prob
         self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
-        self.p_weight1 = nn.Parameter(torch.zeros(4*hidden_size, int(np.sqrt(hidden_size))))
-        self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, int(np.sqrt(hidden_size))))
+        self.p_weight1 = nn.Parameter(torch.zeros(6*hidden_size, int(np.sqrt(hidden_size))))
+        self.p_weight2 = nn.Parameter(torch.zeros(6*hidden_size, int(np.sqrt(hidden_size))))
         self.cq_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
