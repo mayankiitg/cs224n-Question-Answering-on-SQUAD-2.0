@@ -595,8 +595,8 @@ class SelfAttention(nn.Module):
         self.drop_prob = drop_prob
         self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
-        self.p_weight1 = nn.Parameter(torch.zeros(hidden_size, int(np.sqrt(hidden_size))))
-        self.p_weight2 = nn.Parameter(torch.zeros(hidden_size, int(np.sqrt(hidden_size))))
+        self.p_weight1 = nn.Parameter(torch.zeros(4*hidden_size, int(np.sqrt(hidden_size))))
+        self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, int(np.sqrt(hidden_size))))
         self.cq_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
@@ -617,11 +617,12 @@ class SelfAttention(nn.Module):
         a = torch.bmm(s1, q)
         # (bs, c_len, c_len) x (bs, c_len, hid_size) => (bs, c_len, hid_size)
         b = torch.bmm(torch.bmm(s1, s2.transpose(1, 2)), c)
-        ss = self.get_self_similarity_matrix(b) # (bs, c_len, c_len)
+
+        x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size)
+
+        ss = self.get_self_similarity_matrix(x) # (bs, c_len, c_len)
         ss1 = masked_softmax(ss, c_mask, dim=1)
         patt = torch.bmm(ss1, b)
-
-        x = torch.cat([c, a, c * a, c * b, patt], dim=2)  # (bs, c_len, 4 * hid_size)
 
         return x
 
