@@ -30,11 +30,12 @@ class BiDAF(nn.Module):
         hidden_size (int): Number of features in the hidden state at each layer.
         drop_prob (float): Dropout probability.
     """
-    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, drop_prob=0.):
+    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, use_attention, drop_prob=0.):
         super(BiDAF, self).__init__()
         print("initializing Bidaf!")
         self.use_dynamic_coattention = use_dynamic_coattention
         self.use_self_attention = use_self_attention
+        self.use_attention = use_attention
         if use_char_emb:
             print("Using character embeddings")
             self.emb = layers.WordAndCharEmbedding(word_vectors=word_vectors,
@@ -73,6 +74,18 @@ class BiDAF(nn.Module):
                                          drop_prob=drop_prob)
 
             self.out = layers.BiDAFOutput(hidden_size=hidden_size,
+                                          drop_prob=drop_prob)
+        elif self.use_attention:
+            print("Using coattent plus passage self-attention!")
+            self.att = layers.Attention(hidden_size=2 * hidden_size,
+                                             drop_prob=drop_prob)
+
+            self.mod = layers.RNNEncoder(input_size=12 * hidden_size,
+                                         hidden_size=hidden_size,
+                                         num_layers=2,
+                                         drop_prob=drop_prob)
+
+            self.out = layers.AttentionOutput(hidden_size=hidden_size,
                                           drop_prob=drop_prob)
         else:
             self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,

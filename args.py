@@ -248,9 +248,13 @@ def add_train_test_args(parser):
                     help='Whether use character embeddings along with word embeddings in the model.')
     parser.add_argument('--use_dynamic_coattention',
                     type=bool,
-                    default=True,
+                    default=False,
                     help='Whether use dynamic coattention in the model.')
     parser.add_argument('--use_self_attention',
                     type=bool,
-                    default=True,
+                    default=False,
                     help='Whether use self attention in the model.')
+    parser.add_argument('--use_attention',
+                    type=bool,
+                    default=True,
+                    help='Whether use a mix of co-attention and self-attention in the model.')
