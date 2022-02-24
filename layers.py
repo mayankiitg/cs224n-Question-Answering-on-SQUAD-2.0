@@ -729,6 +729,8 @@ class Attention(nn.Module):
     def __init__(self, hidden_size, drop_prob=0.1):
         super().__init__()
         self.drop_prob = drop_prob
+        self.linear1 = nn.Linear(hidden_size, hidden_size)
+        self.linear2 = nn.Linear(hidden_size, hidden_size)
         self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.p_weight1 = nn.Parameter(torch.zeros(6*hidden_size, int(np.sqrt(hidden_size))))
@@ -755,6 +757,11 @@ class Attention(nn.Module):
         b = torch.bmm(torch.bmm(s1, s2.transpose(1, 2)), c)
 
         # Co-attention stuff
+        qprime1 = F.relu(self.linear1(q))
+        qprime = F.relu(self.linear2(qprime1))
+        scoat = torch.matmul(c , qprime.transpose(1, 2))
+        scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
+        scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
         acoat = torch.bmm(scoat1, qprime)
         # (bs, q_len, c_len) x (bs, c_len, hid_size) => (bs, q_len, hid_size)
