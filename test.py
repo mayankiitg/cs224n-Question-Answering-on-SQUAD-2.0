@@ -49,7 +49,8 @@ def main(args):
                   hidden_size=args.hidden_size,
                   use_char_emb=args.use_char_emb,
                   use_dynamic_coattention = args.use_dynamic_coattention,
-                  use_self_attention = args.use_self_attention)
+                  use_self_attention = args.use_self_attention,
+                  use_attention = args.use_attention)
     model = nn.DataParallel(model, gpu_ids)
     log.info(f'Loading checkpoint from {args.load_path}...')
     model = util.load_model(model, args.load_path, gpu_ids, return_step=False)
