@@ -880,3 +880,148 @@ class AttentionOutput(nn.Module):
         log_p2 = masked_softmax(logits_2.squeeze(), mask, log_softmax=True)
 
         return log_p1, log_p2
+
+
+class HighwayMaxoutNetwork(nn.Module):
+    """HMN network for dynamic decoder.
+
+    Based on the Co-attention paper:
+
+    Args:
+        num_layers (int): Number of layers in the highway encoder.
+        hidden_size (int): Size of hidden activations.
+    """
+    def __init__(self, mod_out_size, hidden_size, max_out_pool_size):
+        super(HighwayMaxoutNetwork, self).__init__()
+
+        self.hidden_size = hidden_size
+        self.maxout_pool_size = max_out_pool_size
+
+        print(mod_out_size, hidden_size, max_out_pool_size)
+
+        self.r = nn.Linear(2 * mod_out_size + hidden_size, hidden_size, bias=False)
+
+        self.W1 = nn.Linear(mod_out_size + hidden_size, max_out_pool_size * hidden_size)
+        
+        self.W2 = nn.Linear(hidden_size, max_out_pool_size * hidden_size)
+
+        #self.dropout_m_t_2 = nn.Dropout(p=dropout_ratio)
+
+        self.W3 = nn.Linear(2 * hidden_size, max_out_pool_size)
+
+
+    def forward(self, mod, h_i, u_s_prev, u_e_prev, mask):
+        # mod       (batchSize, seqlen, attention_encoding_size)
+        # u_s_prev  (batch_size, mod_out_size)
+        # u_e_prev  (batch_size, mod_out_size)
+        # h_i       (batch_size, self.hidden_size)
+
+        (batch_size, seq_len, mod_out_size) = mod.shape # (batchSize, seqlen, mod_out_size)
+
+        r = F.tanh(self.r(torch.cat((h_i, u_s_prev, u_e_prev), 1)))  # (batch_size, hidden_size)
+        r_expanded = r.unsqueeze(1).expand(batch_size, seq_len, self.hidden_size).contiguous()  # (batch_size, seq_len, hidden_size)
+        
+        W1_inp = torch.cat((mod, r_expanded), 2)  # (batch_size, seq_len, hidden_size + mod_out_size)
+
+        # Max Pooling activation. (mix of ReLU and Leaku ReLU)
+        # we are doing MLP maxpooling. We could have also done, CONV max pooling.
+        # https://github.com/Duncanswilson/maxout-pytorch/blob/master/maxout_pytorch.ipynb
+
+        m_t_1 = self.W1(W1_inp) # (batch_size, seq_len, hidden_size * pool_size)
+        m_t_1 = m_t_1.view(batch_size, seq_len, self.maxout_pool_size, self.hidden_size) # (batch_size, seq_len, pool_size, hidden_size)
+        m_t_1, _ = m_t_1.max(2) # (batch_size, seq_len, hidden_size) 
+
+        assert(m_t_1.shape == (batch_size, seq_len, self.hidden_size))
+
+        m_t_2 = self.W2(m_t_1)  # (batch_size, seq_len, pool_size * hidden_size) 
+        m_t_2 = m_t_2.view(batch_size, seq_len, self.maxout_pool_size, self.hidden_size) # (batch_size, seq_len, pool_size, hidden_size) 
+        m_t_2, _ = m_t_2.max(2)  # (batch_size, seq_len, hidden_size)
+
+        alpha_in = torch.cat((m_t_1, m_t_2), 2)  # (batch_size, seq_len, 2* hidden_size) 
+        alpha = self.W3(alpha_in)  #  (batch_size, seq_len, pool_size) 
+        logits, _ = alpha.max(2)  # (batch_size, seq_len)
+
+        log_p = masked_softmax(logits, mask, log_softmax=True)
+
+        return log_p
+
+class IterativeDecoderOutput(nn.Module):
+    """Output layer used by Coattention paper.
+
+    Args:
+        hidden_size (int): Hidden size used in the BiDAF model.
+        drop_prob (float): Probability of zero-ing out activations.
+    """
+    def __init__(self, hidden_size, att_out_dim, mod_out_dim, max_decode_steps, maxout_pool_size, drop_prob):
+        super().__init__()
+        self.max_decode_steps = max_decode_steps
+        self.att_out_dim = att_out_dim
+        self.hidden_size = hidden_size
+        self.mod_out_dim = mod_out_dim
+
+        # input to RNN will be: [u_s_i-1 ; u_e_i-1] 
+        # self.decoder = RNNEncoder(2 * mod_out_dim, hidden_size, 1, drop_prob=drop_prob, bidirectional=False)
+        self.decoder = nn.LSTMCell(2 * mod_out_dim, hidden_size, bias=True)
+       
+        # some people forget the biases, and initialize lstm with that.
+        # see if its required.
+
+        self.HMN_start = HighwayMaxoutNetwork(mod_out_dim, hidden_size, maxout_pool_size)
+        self.HMN_end = HighwayMaxoutNetwork(mod_out_dim, hidden_size, maxout_pool_size)
+
+
+    def forward(self, att, mod, mask):
+
+        # att:  (batch_size, seq_len, att_enc_size)
+        # mod:  (batch_size, seq_len, mod_out_size)
+        # mask: (batch_size, seq_len)
+
+        (batch_size, seq_len, _) = mod.shape
+
+        # how to initialize s_prev, e_prev? Its not mentioned in paper.
+        s_prev = torch.zeros(batch_size, ).long() # (batch_size, )
+        e_prev = torch.sum(mask, 1) - 1           # (batch_size, )
+        dec_state_i = None
+
+        batch_idxs = torch.arange(0, batch_size, out=torch.LongTensor(batch_size))
+
+        log_p1s = None # (batch_size, n_iterations, seq_len, )
+        log_p2s = None # (batch_size, n_iterations, seq_len, )
+
+        for _ in range(self.max_decode_steps):
+            u_s_prev = mod[batch_idxs, s_prev, :]  #  (batch_size, mod_out_size)
+            u_e_prev = mod[batch_idxs, e_prev, :]  #  (batch_size, mod_out_size)
+
+            u_cat = torch.cat((u_s_prev, u_e_prev), 1)  # (batch_size, 2 * mod_out_size)
+
+            h_i, c_i = self.decoder(u_cat, dec_state_i) # Each h_i and c_i (batch_size, self.hidden_size)
+            dec_state_i = (h_i, c_i)
+
+            assert(h_i.shape == (batch_size, self.hidden_size))
+
+            s_prev_probs = self.HMN_start(mod, h_i, u_s_prev, u_e_prev, mask) # (batch_size, seq_len)
+            _, s_prev = torch.max(s_prev_probs, dim=1)
+            s_prev_probs = s_prev_probs.unsqueeze(1) # (batch_size, 1, seq_len)
+
+            # print(s_prev)
+            u_s_prev = mod[batch_idxs, s_prev, :]  #  (batch_size, mod_out_size)
+
+            e_prev_probs = self.HMN_end(mod, h_i, u_s_prev, u_e_prev, mask)
+            _, e_prev = torch.max(e_prev_probs, dim=1)
+            e_prev_probs = e_prev_probs.unsqueeze(1) # (batch_size, 1, seq_len)
+            
+            if log_p1s == None and log_p2s == None:
+                log_p1s = s_prev_probs
+                log_p2s = e_prev_probs
+            else:
+                log_p1s = torch.cat((log_p1s, s_prev_probs), dim=1)
+                log_p2s = torch.cat((log_p2s, e_prev_probs), dim=1)
+
+        assert(log_p1s.shape == (batch_size, self.max_decode_steps, seq_len))
+        assert(log_p2s.shape == (batch_size, self.max_decode_steps, seq_len))
+
+        # We can just return the final probabilities.
+        # But the paper is doing commulative losses for all probs. 
+        # Also, we are not stopping if next prediction is same as current prediction, so we may penalize extra for such cases.
+        # we can do something smart about this ^^ , when calculating commulative loss in train.py, maybe??
+        return log_p1s, log_p2s
