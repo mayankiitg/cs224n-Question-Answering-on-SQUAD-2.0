@@ -42,6 +42,7 @@
 | bidaf-coSelfattention (coSelfAtt-01)         | baseline + coattention plus self-attention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  62.84 | 59.27 | 69.53 | 2.98 |
 | bidaf-char02-coSelfattention (coSelfAttCharEmb-01)         | baseline + charemb + attention | LR 0.5, drop_prob 0.2 |  68.23 | 65.`7 | 74.09 | 2.51 |
 | bidaf-char02-highway enc (highenc-01)         | baseline + charemb + highway enc C,Q b4 att | LR 0.5, drop_prob 0.2 |  65.83 | 62.17 | 72.09 | 2.77 |
+| bidaf-char02-coSelfBoth (coSelfBoth-01)         | baseline + charemb + co+self att additive+multiplicative | LR 0.5, drop_prob 0.2 |  66.55 | 63.01 | 72.69 | 2.71 |
 
 
 ## Setup
