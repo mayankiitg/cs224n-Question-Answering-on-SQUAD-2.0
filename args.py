@@ -258,3 +258,8 @@ def add_train_test_args(parser):
                     type=bool,
                     default=True,
                     help='Whether use a mix of co-attention and self-attention in the model.')
+    parser.add_argument('--use_dynamic_decoder',
+                    type=bool,
+                    default=False,
+                    help='Whether use a Dynamic iterative decoder, as mentioned in Co-Attention paper.')
+                    
