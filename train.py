@@ -128,21 +128,53 @@ def main(args):
 
                 # log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
                 # log_p2 = log_p2[:,-1,:]
+                st_idx_i_1 = None
+                end_idx_i_1 = None
+                curr_mask_1 = None
+                curr_mask_2 = None
 
-                if args.use_dynamic_decoder and len(log_p1.shape) == 3:
+                if len(log_p1.shape) == 3:
                     n_iter = log_p1.shape[1]
                     aggregated_loss = 0
                     for i in range(n_iter):
                         log_p1_i = log_p1[:,i,:]
                         log_p2_i = log_p2[:,i,:]
-                        aggregated_loss += (F.nll_loss(log_p1_i, y1) + F.nll_loss(log_p2_i, y2))
 
-                    loss = aggregated_loss
-                    loss_val = aggregated_loss.item()
+                        step_loss1 = F.nll_loss(log_p1_i, y1, reduce=False) 
+                        step_loss2 =  F.nll_loss(log_p2_i, y2, reduce=False)
+                        
+                        _, st_idx_i = torch.max(log_p1_i, dim=1)
+                        _, end_idx_i = torch.max(log_p2_i, dim=1)
+                        
+                        if curr_mask_1 == None:
+                            curr_mask_1 = (st_idx_i == st_idx_i)
+                            curr_mask_2 = (end_idx_i == end_idx_i)
+                        else:
+                            curr_mask_1 = (st_idx_i != st_idx_i_1) * curr_mask_1
+                            curr_mask_2 = (end_idx_i != end_idx_i_1) * curr_mask_2
+                        
+                        # print('iteration {} mask1: {}, mask2: {}'.format(i, curr_mask_1, curr_mask_2))
+                        # print('st_idx: {}, end: {}'.format(st_idx_i, end_idx_i))
+                        # print(step_loss1, step_loss2)
+
+                        step_loss1 = step_loss1 * curr_mask_1.float()
+                        step_loss2 = step_loss2 * curr_mask_2.float()
+                        
+
+                        aggregated_loss += (step_loss1 + step_loss2)
+                        # print(aggregated_loss)
+
+                        st_idx_i_1 = st_idx_i
+                        end_idx_i_1 = end_idx_i
+                    
+                    loss = torch.sum(aggregated_loss)
+                    # print('aggregated loss: {}'.format(loss))
+                    log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
+                    log_p2 = log_p2[:,-1,:]
                 else:
                     loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
-                    loss_val = loss.item()
-
+                
+                loss_val = loss.item()
                 # Backward
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
@@ -212,16 +244,47 @@ def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
             # log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
             # log_p2 = log_p2[:,-1,:]
 
-            loss = 0
+            st_idx_i_1 = None
+            end_idx_i_1 = None
+            curr_mask_1 = None
+            curr_mask_2 = None
+
             if len(log_p1.shape) == 3:
                 n_iter = log_p1.shape[1]
                 aggregated_loss = 0
                 for i in range(n_iter):
                     log_p1_i = log_p1[:,i,:]
                     log_p2_i = log_p2[:,i,:]
-                    aggregated_loss += (F.nll_loss(log_p1_i, y1) + F.nll_loss(log_p2_i, y2))
+
+                    step_loss1 = F.nll_loss(log_p1_i, y1, reduce=False) 
+                    step_loss2 =  F.nll_loss(log_p2_i, y2, reduce=False)
+                    
+                    _, st_idx_i = torch.max(log_p1_i, dim=1)
+                    _, end_idx_i = torch.max(log_p2_i, dim=1)
+                    
+                    if curr_mask_1 == None:
+                        curr_mask_1 = (st_idx_i == st_idx_i)
+                        curr_mask_2 = (end_idx_i == end_idx_i)
+                    else:
+                        curr_mask_1 = (st_idx_i != st_idx_i_1) * curr_mask_1
+                        curr_mask_2 = (end_idx_i != end_idx_i_1) * curr_mask_2
+                    
+                    # print('iteration {} mask1: {}, mask2: {}'.format(i, curr_mask_1, curr_mask_2))
+                    # print('st_idx: {}, end: {}'.format(st_idx_i, end_idx_i))
+                    # print(step_loss1, step_loss2)
+
+                    step_loss1 = step_loss1 * curr_mask_1.float()
+                    step_loss2 = step_loss2 * curr_mask_2.float()
+                    
+
+                    aggregated_loss += (step_loss1 + step_loss2)
+                    # print(aggregated_loss)
+
+                    st_idx_i_1 = st_idx_i
+                    end_idx_i_1 = end_idx_i
                 
-                loss = aggregated_loss
+                loss = torch.sum(aggregated_loss)
+                # print('aggregated loss: {}'.format(loss))
                 log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
                 log_p2 = log_p2[:,-1,:]
             else:
