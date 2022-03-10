@@ -756,7 +756,7 @@ class Attention(nn.Module):
         # self.p_weight1 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         # self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         self.p2_weight = nn.Parameter(torch.zeros(1, 1, 4*hidden_size))
-        self.multihead_attn = nn.MultiheadAttention(hidden_size, 4, dropout=drop_prob)
+        self.multihead_attn = nn.MultiheadAttention(hidden_size, 4, dropout=drop_prob) # batch_first=True doesn't work in this version of pytorch
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         # for weight in (self.p_weight1, self.p_weight2):
@@ -784,7 +784,7 @@ class Attention(nn.Module):
         #qprime1 = F.relu(self.linear1(q))
         #qprime = F.relu(self.linear2(qprime1))
         #scoat = torch.matmul(c , qprime.transpose(1, 2))
-        _, scoat = self.multihead_attn(c, q, q)
+        _, scoat = self.multihead_attn(c.transpose(1, 0), q.transpose(1, 0), q.transpose(1, 0)) # # batch_first=True doesn't work in this version of pytorch
         scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
         scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)

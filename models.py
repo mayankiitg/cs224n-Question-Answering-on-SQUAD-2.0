@@ -55,9 +55,6 @@ class BiDAF(nn.Module):
             self.emb = layers.Embedding(word_vectors=word_vectors,
                                         hidden_size=hidden_size,
                                         drop_prob=drop_prob)
-        if use_highway_encoder:
-            self.highencC = layers.HighwayEncoder(num_layers=2, hidden_size=hidden_size)
-            self.highencQ = layers.HighwayEncoder(num_layers=2, hidden_size=hidden_size)
 
 
         self.enc = layers.RNNEncoder(input_size=hidden_size,
@@ -93,7 +90,7 @@ class BiDAF(nn.Module):
             self.out = layers.BiDAFOutput(hidden_size=hidden_size,
                                           drop_prob=drop_prob)
 
-            
+
             att_out_dim = 8 * hidden_size
             mod_out_dim = 2 * hidden_size
         elif self.use_attention:
@@ -123,7 +120,7 @@ class BiDAF(nn.Module):
 
             self.out = layers.BiDAFOutput(hidden_size=hidden_size,
                                           drop_prob=drop_prob)
-                                          
+
             att_out_dim = 8 * hidden_size
             mod_out_dim = 2 * hidden_size
 
