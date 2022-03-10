@@ -123,7 +123,8 @@ class BiDAF(nn.Module):
                                                     att_out_dim=att_out_dim,
                                                     mod_out_dim=mod_out_dim,
                                                     max_decode_steps=4,   # Hyper Param
-                                                    maxout_pool_size=16,   # Hyper Param
+                                                    maxout_pool_size=4,   # Hyper Param
+                                                    older_out_layer=self.out,
                                                     drop_prob=drop_prob)
 
     def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):

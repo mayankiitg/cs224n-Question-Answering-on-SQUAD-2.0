@@ -952,36 +952,54 @@ class IterativeDecoderOutput(nn.Module):
         hidden_size (int): Hidden size used in the BiDAF model.
         drop_prob (float): Probability of zero-ing out activations.
     """
-    def __init__(self, hidden_size, att_out_dim, mod_out_dim, max_decode_steps, maxout_pool_size, drop_prob):
+    def __init__(self, hidden_size, att_out_dim, mod_out_dim, max_decode_steps, maxout_pool_size, older_out_layer, drop_prob):
         super().__init__()
         self.max_decode_steps = max_decode_steps
         self.att_out_dim = att_out_dim
         self.hidden_size = hidden_size
         self.mod_out_dim = mod_out_dim
 
+        ### Either enable or disable this.
+        # self.fuse_att_mod = False
+
+        # if self.fuse_att_mod:
+        #     self.mod_out_dim = self.mod_out_dim + self.att_out_dim
+
         # input to RNN will be: [u_s_i-1 ; u_e_i-1] 
         # self.decoder = RNNEncoder(2 * mod_out_dim, hidden_size, 1, drop_prob=drop_prob, bidirectional=False)
-        self.decoder = nn.LSTMCell(2 * mod_out_dim, hidden_size, bias=True)
+        self.decoder = nn.LSTMCell(2 * self.mod_out_dim, hidden_size, bias=True)
+
+        self.olderDecoder = older_out_layer
        
         # some people forget the biases, and initialize lstm with that.
         # see if its required.
 
-        self.HMN_start = HighwayMaxoutNetwork(mod_out_dim, hidden_size, maxout_pool_size)
-        self.HMN_end = HighwayMaxoutNetwork(mod_out_dim, hidden_size, maxout_pool_size)
-
+        self.HMN_start = HighwayMaxoutNetwork(self.mod_out_dim, hidden_size, maxout_pool_size)
+        self.HMN_end = HighwayMaxoutNetwork(self.mod_out_dim, hidden_size, maxout_pool_size)
 
     def forward(self, att, mod, mask):
 
         # att:  (batch_size, seq_len, att_enc_size)
         # mod:  (batch_size, seq_len, mod_out_size)
         # mask: (batch_size, seq_len)
+        
+        # if self.fuse_att_mod:
+        #     mod = torch.cat((mod, att), dim=2)
 
         (batch_size, seq_len, _) = mod.shape
 
+        log_p1, log_p2 = self.olderDecoder(att, mod, mask)
+
+        _, s_prev = torch.max(log_p1, dim = 1)
+        _, e_prev = torch.max(log_p2, dim = 1)
+
         # how to initialize s_prev, e_prev? Its not mentioned in paper.
-        s_prev = torch.zeros(batch_size, ).long() # (batch_size, )
-        e_prev = torch.sum(mask, 1) - 1           # (batch_size, )
+        # s_prev = torch.zeros(batch_size, ).long() # (batch_size, )
+        # e_prev = torch.sum(mask, 1) - 1           # (batch_size, )
         dec_state_i = None
+
+        assert(s_prev.shape == (batch_size, ))
+        assert(e_prev.shape == (batch_size, ))
 
         batch_idxs = torch.arange(0, batch_size, out=torch.LongTensor(batch_size))
 
