@@ -748,8 +748,8 @@ class Attention(nn.Module):
     def __init__(self, hidden_size, drop_prob=0.1):
         super().__init__()
         self.drop_prob = drop_prob
-        # self.linear1 = nn.Linear(hidden_size, hidden_size)
-        # self.linear2 = nn.Linear(hidden_size, hidden_size)
+        # self.linear1 = nn.Linear(6*hidden_size, hidden_size)
+        # self.linear2 = nn.Linear(hidden_size, 6*hidden_size)
         self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.cq_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
@@ -758,7 +758,7 @@ class Attention(nn.Module):
         self.p2_weight = nn.Parameter(torch.zeros(1, 1, 4*hidden_size))
         self.multihead_attn = nn.MultiheadAttention(hidden_size, 4, dropout=drop_prob) # batch_first=True doesn't work in this version of pytorch
         self.layer_norm = nn.LayerNorm(6*hidden_size)
-        self.multihead_self = nn.MultiheadAttention(6*hidden_size, 24, dropout=drop_prob) # batch_first=True doesn't work in this version of pytorch
+        self.multihead_self = nn.MultiheadAttention(6*hidden_size, 24, dropout=drop_prob, kdim=hidden_size//10, vdim = hidden_size//10) # batch_first=True doesn't work in this version of pytorch
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         # for weight in (self.p_weight1, self.p_weight2):
@@ -815,7 +815,11 @@ class Attention(nn.Module):
         ss1 = masked_softmax(ss, c_mask, dim=1)
         patt = torch.bmm(ss1, y) + x
 
-        return patt
+        # feed-Forward
+        # first = F.relu(self.linear1(patt))
+        # second = F.relu(self.linear2(first))+patt
+
+        return patt # second, x
 
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
