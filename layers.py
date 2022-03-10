@@ -791,7 +791,7 @@ class Attention(nn.Module):
         acoat = torch.bmm(scoat1, q)
         # (bs, q_len, c_len) x (bs, c_len, hid_size) => (bs, q_len, hid_size)
         bcoat = torch.bmm(scoat2.transpose(1, 2), c)
-        scoat3 = torch.bmm(torch.bmm(s2.transpose(1, 2), c))
+        scoat3 = torch.bmm(scoat3, bcoat)
         # Co-attention stuff
         #qprime1 = F.relu(self.linear1(q))
         #qprime = F.relu(self.linear2(qprime1))
