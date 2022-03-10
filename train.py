@@ -57,7 +57,6 @@ def main(args):
                   use_attention = args.use_attention,
                   use_dynamic_decoder=args.use_dynamic_decoder)
 
-
     model = nn.DataParallel(model, args.gpu_ids)
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
