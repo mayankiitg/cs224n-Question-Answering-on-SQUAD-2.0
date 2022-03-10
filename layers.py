@@ -752,19 +752,28 @@ class Attention(nn.Module):
         self.linear2 = nn.Linear(hidden_size, hidden_size)
         self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
-        self.p_weight1 = nn.Parameter(torch.zeros(6*hidden_size, int(np.sqrt(hidden_size))))
-        self.p_weight2 = nn.Parameter(torch.zeros(6*hidden_size, int(np.sqrt(hidden_size))))
         self.cq_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
+        self.p_weight1 = nn.Parameter(torch.zeros(4*hidden_size, 1))
+        self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, 1))
+        self.p2_weight = nn.Parameter(torch.zeros(1, 1, 4*hidden_size))
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         for weight in (self.p_weight1, self.p_weight2):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
+        self.pbias = nn.Parameter(torch.zeros(1))
 
     def forward(self, c, q, c_mask, q_mask):
         batch_size, c_len, _ = c.size()
         q_len = q.size(1)
-        s = self.get_similarity_matrix(c, q)        # (batch_size, c_len, q_len)
+
+        # Co-attention stuff
+        qprime1 = F.relu(self.linear1(q))
+        qprime = F.relu(self.linear2(qprime1))
+        scoat = torch.matmul(c , qprime.transpose(1, 2))
+
+        s = self.get_similarity_matrix(c, q) + scoat       # (batch_size, c_len, q_len)
+
         c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
         q_mask = q_mask.view(batch_size, 1, q_len)  # (batch_size, 1, q_len)
         s1 = masked_softmax(s, q_mask, dim=2)       # (batch_size, c_len, q_len)
@@ -776,25 +785,26 @@ class Attention(nn.Module):
         b = torch.bmm(torch.bmm(s1, s2.transpose(1, 2)), c)
 
         # Co-attention stuff
-        qprime1 = F.relu(self.linear1(q))
-        qprime = F.relu(self.linear2(qprime1))
-        scoat = torch.matmul(c , qprime.transpose(1, 2))
-        scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
-        scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
+        #qprime1 = F.relu(self.linear1(q))
+        #qprime = F.relu(self.linear2(qprime1))
+        #scoat = torch.matmul(c , qprime.transpose(1, 2))
+        #scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
+        #scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
-        acoat = torch.bmm(scoat1, qprime)
+        #acoat = torch.bmm(scoat1, qprime)
         # (bs, q_len, c_len) x (bs, c_len, hid_size) => (bs, q_len, hid_size)
-        bcoat = torch.bmm(scoat2.transpose(1, 2), c)
-        scoat = torch.bmm(scoat1, bcoat)
+        #bcoat = torch.bmm(scoat2.transpose(1, 2), c)
+        #scoat3 = torch.bmm(torch.bmm(s2.transpose(1, 2), c))
 
-        # Merge BiDAF and Coattention
-        x = torch.cat([c, a, c * a, c * b, scoat, acoat], dim=2)  # (bs, c_len, 6 * hid_size)
+        # BiDAF
+        x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size) torch.cat([c, a, c * a, c * b, scoat3, acoat], dim=2)  # (bs, c_len, 6 * hid_size)
 
+        # self attention
         ss = self.get_self_similarity_matrix(x) # (bs, c_len, c_len)
         ss1 = masked_softmax(ss, c_mask, dim=1)
-        patt = torch.bmm(ss1, b)
+        patt = torch.bmm(ss1, x)
 
-        return x
+        return patt
 
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
@@ -836,10 +846,15 @@ class Attention(nn.Module):
         #q = F.dropout(q, self.drop_prob, self.training)  # (bs, q_len, hid_size)
 
         # Shapes: (batch_size, c_len, q_len)
-        s0 = torch.matmul(b, self.p_weight1) # (bs, c_len, sqrt(hidden_size))
-        s1 = torch.matmul(b, self.p_weight2) # (bs, c_len, sqrt(hidden_size))
-        s = torch.matmul(s0, s1.transpose(1, 2)) # (bs, c_len, c_len)
+        s0a = torch.matmul(b, self.p_weight1) # (bs, c_len, sqrt(hidden_size))
+        s1a = torch.matmul(b, self.p_weight2) # (bs, c_len, sqrt(hidden_size))
+        sa = torch.matmul(s0a, s1a.transpose(1, 2)) # (bs, c_len, c_len)
 
+        s0 = torch.matmul(b, self.p_weight1).expand([-1, -1, b_len])
+        s1 = torch.matmul(b, self.p_weight2).transpose(1, 2)\
+                                           .expand([-1, b_len, -1])
+        s2 = torch.matmul(b * self.p2_weight, b.transpose(1, 2))
+        s = s0 + s1 + s2 + self.pbias + sa
         return s
 
 
@@ -858,7 +873,7 @@ class AttentionOutput(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob):
         super().__init__()
-        self.att_linear_1 = nn.Linear(12 * hidden_size, 1)
+        self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
         self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
 
         self.rnn = RNNEncoder(input_size=2 * hidden_size,
@@ -866,7 +881,7 @@ class AttentionOutput(nn.Module):
                               num_layers=1,
                               drop_prob=drop_prob)
 
-        self.att_linear_2 = nn.Linear(12 * hidden_size, 1)
+        self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
         self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
 
     def forward(self, att, mod, mask):
