@@ -30,20 +30,16 @@ class BiDAF(nn.Module):
         hidden_size (int): Number of features in the hidden state at each layer.
         drop_prob (float): Dropout probability.
     """
-
     def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, use_attention, use_dynamic_decoder, drop_prob=0.):
-
         super(BiDAF, self).__init__()
         print("initializing Bidaf!")
         self.use_dynamic_coattention = use_dynamic_coattention
         self.use_self_attention = use_self_attention
         self.use_attention = use_attention
-
         self.use_dynamic_decoder = use_dynamic_decoder
 
         att_out_dim = 0
         mod_out_dim = 0
-
 
         if use_char_emb:
             print("Using character embeddings")
@@ -55,16 +51,11 @@ class BiDAF(nn.Module):
             self.emb = layers.Embedding(word_vectors=word_vectors,
                                         hidden_size=hidden_size,
                                         drop_prob=drop_prob)
-        if use_highway_encoder:
-            self.highencC = layers.HighwayEncoder(num_layers=2, hidden_size=hidden_size)
-            self.highencQ = layers.HighwayEncoder(num_layers=2, hidden_size=hidden_size)
-
 
         self.enc = layers.RNNEncoder(input_size=hidden_size,
                                      hidden_size=hidden_size,
                                      num_layers=1,
                                      drop_prob=drop_prob)
-
         if self.use_dynamic_coattention:
             print("Using dynamic coattention!")
             self.att = layers.CoAttention(hidden_size=2 * hidden_size,
@@ -92,7 +83,6 @@ class BiDAF(nn.Module):
 
             self.out = layers.BiDAFOutput(hidden_size=hidden_size,
                                           drop_prob=drop_prob)
-
             
             att_out_dim = 8 * hidden_size
             mod_out_dim = 2 * hidden_size
@@ -111,7 +101,6 @@ class BiDAF(nn.Module):
 
             att_out_dim = 12 * hidden_size
             mod_out_dim = 2 * hidden_size
-
         else:
             self.att = layers.BiDAFAttention(hidden_size=2 * hidden_size,
                                              drop_prob=drop_prob)
@@ -146,12 +135,8 @@ class BiDAF(nn.Module):
         q_mask = torch.zeros_like(qw_idxs) != qw_idxs
         c_len, q_len = c_mask.sum(-1), q_mask.sum(-1)
 
-        if self.use_highway_encoder:
-            c_emb = self.highencC(self.emb(cw_idxs, cc_idxs))         # (batch_size, c_len, hidden_size)
-            q_emb = self.highencQ(self.emb(qw_idxs, qc_idxs))         # (batch_size, q_len, hidden_size)
-        else:
-            c_emb = self.emb(cw_idxs, cc_idxs)         # (batch_size, c_len, hidden_size)
-            q_emb = self.emb(qw_idxs, qc_idxs)         # (batch_size, q_len, hidden_size)
+        c_emb = self.emb(cw_idxs, cc_idxs)         # (batch_size, c_len, hidden_size)
+        q_emb = self.emb(qw_idxs, qc_idxs)         # (batch_size, q_len, hidden_size)
 
         c_enc = self.enc(c_emb, c_len)    # (batch_size, c_len, 2 * hidden_size)
         q_enc = self.enc(q_emb, q_len)    # (batch_size, q_len, 2 * hidden_size)
