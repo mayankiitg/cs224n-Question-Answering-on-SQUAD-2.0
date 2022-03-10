@@ -139,7 +139,7 @@ class CharEmbedding(nn.Module):
         # Step 1: Conv1d filters: shape: (batch_size * seq_len, out_channels=50, word_len-4) as filter width is 5, with 1 stride, so that dimesion will be word_len-4
         # Step 2: MaxPool1D across last dimension. so shape will be: (batch_size * seq_len, out_channels=50, 1)
 
-        
+
         emb1.squeeze(-1) # (batch_size * seq_len, out_channels=50)
         emb1 = emb1.reshape(x.shape[0], x.shape[1], -1) # (batch_size, seq_len, out_channels=50)
         assert(emb1.shape == ((batch_size, seq_len, self.n_filters)))
@@ -643,7 +643,7 @@ class SelfAttention(nn.Module):
         ss1 = masked_softmax(ss, c_mask, dim=1)
         patt = torch.bmm(ss1, b)
 
-        return x
+        return patt
 
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
@@ -748,31 +748,27 @@ class Attention(nn.Module):
     def __init__(self, hidden_size, drop_prob=0.1):
         super().__init__()
         self.drop_prob = drop_prob
-        self.linear1 = nn.Linear(hidden_size, hidden_size)
-        self.linear2 = nn.Linear(hidden_size, hidden_size)
+        # self.linear1 = nn.Linear(hidden_size, hidden_size)
+        # self.linear2 = nn.Linear(hidden_size, hidden_size)
         self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.cq_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
-        self.p_weight1 = nn.Parameter(torch.zeros(4*hidden_size, 1))
-        self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, 1))
+        # self.p_weight1 = nn.Parameter(torch.zeros(4*hidden_size, 1))
+        # self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         self.p2_weight = nn.Parameter(torch.zeros(1, 1, 4*hidden_size))
+        self.multihead_attn = nn.MultiheadAttention(hidden_size, 4, dropout=drop_prob)
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
-        for weight in (self.p_weight1, self.p_weight2):
-            nn.init.xavier_uniform_(weight)
+        # for weight in (self.p_weight1, self.p_weight2):
+        #     nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
-        self.pbias = nn.Parameter(torch.zeros(1))
+        # self.pbias = nn.Parameter(torch.zeros(1))
 
     def forward(self, c, q, c_mask, q_mask):
         batch_size, c_len, _ = c.size()
         q_len = q.size(1)
 
-        # Co-attention stuff
-        qprime1 = F.relu(self.linear1(q))
-        qprime = F.relu(self.linear2(qprime1))
-        scoat = torch.matmul(c , qprime.transpose(1, 2))
-
-        s = self.get_similarity_matrix(c, q) + scoat       # (batch_size, c_len, q_len)
+        s = self.get_similarity_matrix(c, q)       # (batch_size, c_len, q_len)
 
         c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
         q_mask = q_mask.view(batch_size, 1, q_len)  # (batch_size, 1, q_len)
@@ -788,6 +784,18 @@ class Attention(nn.Module):
         #qprime1 = F.relu(self.linear1(q))
         #qprime = F.relu(self.linear2(qprime1))
         #scoat = torch.matmul(c , qprime.transpose(1, 2))
+        _, scoat = self.multihead_attn(c, q, q)
+        scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
+        scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
+        # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
+        acoat = torch.bmm(scoat1, q)
+        # (bs, q_len, c_len) x (bs, c_len, hid_size) => (bs, q_len, hid_size)
+        bcoat = torch.bmm(scoat2.transpose(1, 2), c)
+        scoat3 = torch.bmm(torch.bmm(s2.transpose(1, 2), c))
+        # Co-attention stuff
+        #qprime1 = F.relu(self.linear1(q))
+        #qprime = F.relu(self.linear2(qprime1))
+        #scoat = torch.matmul(c , qprime.transpose(1, 2))
         #scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
         #scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
@@ -797,14 +805,14 @@ class Attention(nn.Module):
         #scoat3 = torch.bmm(torch.bmm(s2.transpose(1, 2), c))
 
         # BiDAF
-        x = torch.cat([c, a, c * a, c * b], dim=2)  # (bs, c_len, 4 * hid_size) torch.cat([c, a, c * a, c * b, scoat3, acoat], dim=2)  # (bs, c_len, 6 * hid_size)
+        x = torch.cat([c, a, c * a, c * b, scoat3, acoat], dim=2)  # (bs, c_len, 4 * hid_size) torch.cat([c, a, c * a, c * b, scoat3, acoat], dim=2)  # (bs, c_len, 6 * hid_size)
 
         # self attention
-        ss = self.get_self_similarity_matrix(x) # (bs, c_len, c_len)
-        ss1 = masked_softmax(ss, c_mask, dim=1)
-        patt = torch.bmm(ss1, x)
+        # ss = self.get_self_similarity_matrix(x) # (bs, c_len, c_len)
+        # ss1 = masked_softmax(ss, c_mask, dim=1)
+        # patt = torch.bmm(ss1, x)
 
-        return patt
+        return x
 
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
@@ -830,32 +838,32 @@ class Attention(nn.Module):
 
         return s
 
-    def get_self_similarity_matrix(self, b):
-        """Get the "similarity matrix" between context and query (using the
-        terminology of the BiDAF paper).
-
-        A naive implementation as described in BiDAF would concatenate the
-        three vectors then project the result with a single weight matrix. This
-        method is a more memory-efficient implementation of the same operation.
-
-        See Also:
-            Equation 1 in https://arxiv.org/abs/1611.01603
-        """
-        b_len= b.size(1)
-        b = F.dropout(b, self.drop_prob, self.training)  # (bs, c_len, hid_size)
-        #q = F.dropout(q, self.drop_prob, self.training)  # (bs, q_len, hid_size)
-
-        # Shapes: (batch_size, c_len, q_len)
-        s0a = torch.matmul(b, self.p_weight1) # (bs, c_len, sqrt(hidden_size))
-        s1a = torch.matmul(b, self.p_weight2) # (bs, c_len, sqrt(hidden_size))
-        sa = torch.matmul(s0a, s1a.transpose(1, 2)) # (bs, c_len, c_len)
-
-        s0 = torch.matmul(b, self.p_weight1).expand([-1, -1, b_len])
-        s1 = torch.matmul(b, self.p_weight2).transpose(1, 2)\
-                                           .expand([-1, b_len, -1])
-        s2 = torch.matmul(b * self.p2_weight, b.transpose(1, 2))
-        s = s0 + s1 + s2 + self.pbias + sa
-        return s
+    # def get_self_similarity_matrix(self, b):
+    #     """Get the "similarity matrix" between context and query (using the
+    #     terminology of the BiDAF paper).
+    #
+    #     A naive implementation as described in BiDAF would concatenate the
+    #     three vectors then project the result with a single weight matrix. This
+    #     method is a more memory-efficient implementation of the same operation.
+    #
+    #     See Also:
+    #         Equation 1 in https://arxiv.org/abs/1611.01603
+    #     """
+    #     b_len= b.size(1)
+    #     b = F.dropout(b, self.drop_prob, self.training)  # (bs, c_len, hid_size)
+    #     #q = F.dropout(q, self.drop_prob, self.training)  # (bs, q_len, hid_size)
+    #
+    #     # Shapes: (batch_size, c_len, q_len)
+    #     s0a = torch.matmul(b, self.p_weight1) # (bs, c_len, sqrt(hidden_size))
+    #     s1a = torch.matmul(b, self.p_weight2) # (bs, c_len, sqrt(hidden_size))
+    #     sa = torch.matmul(s0a, s1a.transpose(1, 2)) # (bs, c_len, c_len)
+    #
+    #     s0 = torch.matmul(b, self.p_weight1).expand([-1, -1, b_len])
+    #     s1 = torch.matmul(b, self.p_weight2).transpose(1, 2)\
+    #                                        .expand([-1, b_len, -1])
+    #     s2 = torch.matmul(b * self.p2_weight, b.transpose(1, 2))
+    #     s = s0 + s1 + s2 + self.pbias + sa
+    #     return s
 
 
 class AttentionOutput(nn.Module):
@@ -873,7 +881,7 @@ class AttentionOutput(nn.Module):
     """
     def __init__(self, hidden_size, drop_prob):
         super().__init__()
-        self.att_linear_1 = nn.Linear(8 * hidden_size, 1)
+        self.att_linear_1 = nn.Linear(12 * hidden_size, 1)
         self.mod_linear_1 = nn.Linear(2 * hidden_size, 1)
 
         self.rnn = RNNEncoder(input_size=2 * hidden_size,
@@ -881,7 +889,7 @@ class AttentionOutput(nn.Module):
                               num_layers=1,
                               drop_prob=drop_prob)
 
-        self.att_linear_2 = nn.Linear(8 * hidden_size, 1)
+        self.att_linear_2 = nn.Linear(12 * hidden_size, 1)
         self.mod_linear_2 = nn.Linear(2 * hidden_size, 1)
 
     def forward(self, att, mod, mask):
@@ -917,7 +925,7 @@ class HighwayMaxoutNetwork(nn.Module):
         self.r = nn.Linear(2 * mod_out_size + hidden_size, hidden_size, bias=False)
 
         self.W1 = nn.Linear(mod_out_size + hidden_size, max_out_pool_size * hidden_size)
-        
+
         self.W2 = nn.Linear(hidden_size, max_out_pool_size * hidden_size)
 
         #self.dropout_m_t_2 = nn.Dropout(p=dropout_ratio)
@@ -935,7 +943,7 @@ class HighwayMaxoutNetwork(nn.Module):
 
         r = F.tanh(self.r(torch.cat((h_i, u_s_prev, u_e_prev), 1)))  # (batch_size, hidden_size)
         r_expanded = r.unsqueeze(1).expand(batch_size, seq_len, self.hidden_size).contiguous()  # (batch_size, seq_len, hidden_size)
-        
+
         W1_inp = torch.cat((mod, r_expanded), 2)  # (batch_size, seq_len, hidden_size + mod_out_size)
 
         # Max Pooling activation. (mix of ReLU and Leaku ReLU)
@@ -944,16 +952,16 @@ class HighwayMaxoutNetwork(nn.Module):
 
         m_t_1 = self.W1(W1_inp) # (batch_size, seq_len, hidden_size * pool_size)
         m_t_1 = m_t_1.view(batch_size, seq_len, self.maxout_pool_size, self.hidden_size) # (batch_size, seq_len, pool_size, hidden_size)
-        m_t_1, _ = m_t_1.max(2) # (batch_size, seq_len, hidden_size) 
+        m_t_1, _ = m_t_1.max(2) # (batch_size, seq_len, hidden_size)
 
         assert(m_t_1.shape == (batch_size, seq_len, self.hidden_size))
 
-        m_t_2 = self.W2(m_t_1)  # (batch_size, seq_len, pool_size * hidden_size) 
-        m_t_2 = m_t_2.view(batch_size, seq_len, self.maxout_pool_size, self.hidden_size) # (batch_size, seq_len, pool_size, hidden_size) 
+        m_t_2 = self.W2(m_t_1)  # (batch_size, seq_len, pool_size * hidden_size)
+        m_t_2 = m_t_2.view(batch_size, seq_len, self.maxout_pool_size, self.hidden_size) # (batch_size, seq_len, pool_size, hidden_size)
         m_t_2, _ = m_t_2.max(2)  # (batch_size, seq_len, hidden_size)
 
-        alpha_in = torch.cat((m_t_1, m_t_2), 2)  # (batch_size, seq_len, 2* hidden_size) 
-        alpha = self.W3(alpha_in)  #  (batch_size, seq_len, pool_size) 
+        alpha_in = torch.cat((m_t_1, m_t_2), 2)  # (batch_size, seq_len, 2* hidden_size)
+        alpha = self.W3(alpha_in)  #  (batch_size, seq_len, pool_size)
         logits, _ = alpha.max(2)  # (batch_size, seq_len)
 
         log_p = masked_softmax(logits, mask, log_softmax=True)
@@ -974,10 +982,10 @@ class IterativeDecoderOutput(nn.Module):
         self.hidden_size = hidden_size
         self.mod_out_dim = mod_out_dim
 
-        # input to RNN will be: [u_s_i-1 ; u_e_i-1] 
+        # input to RNN will be: [u_s_i-1 ; u_e_i-1]
         # self.decoder = RNNEncoder(2 * mod_out_dim, hidden_size, 1, drop_prob=drop_prob, bidirectional=False)
         self.decoder = nn.LSTMCell(2 * mod_out_dim, hidden_size, bias=True)
-       
+
         # some people forget the biases, and initialize lstm with that.
         # see if its required.
 
@@ -1024,7 +1032,7 @@ class IterativeDecoderOutput(nn.Module):
             e_prev_probs = self.HMN_end(mod, h_i, u_s_prev, u_e_prev, mask)
             _, e_prev = torch.max(e_prev_probs, dim=1)
             e_prev_probs = e_prev_probs.unsqueeze(1) # (batch_size, 1, seq_len)
-            
+
             if log_p1s == None and log_p2s == None:
                 log_p1s = s_prev_probs
                 log_p2s = e_prev_probs
@@ -1036,7 +1044,7 @@ class IterativeDecoderOutput(nn.Module):
         assert(log_p2s.shape == (batch_size, self.max_decode_steps, seq_len))
 
         # We can just return the final probabilities.
-        # But the paper is doing commulative losses for all probs. 
+        # But the paper is doing commulative losses for all probs.
         # Also, we are not stopping if next prediction is same as current prediction, so we may penalize extra for such cases.
         # we can do something smart about this ^^ , when calculating commulative loss in train.py, maybe??
         return log_p1s, log_p2s
