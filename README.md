@@ -47,6 +47,8 @@
 | bidaf-char02-coSelfLayerNorm (coSelfBothLayerNorm-01)        | baseline + charemb + co+self with layernorm,resid | LR 0.5, drop_prob 0.2 |  65.94 | 62.58 | 71.84 | 2.71 |
 | bidaf-best-model-hyperparam-1        | baseline + charemb + co+self + hyper param tuning | LR: 0.8**(2 *s//15000), drop_prob 0.3 |  64.30 | 60.73 | 70.58 | 2.74 |
 | bidaf-char-iterative-decoder-step-loss | baseline + charemb + iterative decoder with step loss | LR: 0.5 till 1M, then exp decay, drop_prob 0.2 |  66.47 | 63.27 | 72.41 | 2.58 |
+| Best model - dropout 0.3 | baseline + charemb + all att | LR: 0.5 till 1M, then exp decay, drop_prob 0.3 | 64.30  | 60.73 | 70.58 | 2.74 |
+| Best model - dropout 0.15 | baseline + charemb + all att | LR: 0.5 till 1M, then exp decay, drop_prob 0.15 |  66.03 | 63.15 | 71.53 | 2.51 |
 
 
 ## Setup
