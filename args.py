@@ -257,8 +257,9 @@ def add_train_test_args(parser):
     parser.add_argument('--use_attention',
                     type=bool,
                     default=True,
-                    help='Whether to use a mix of co-attention and self-attention in the model.')
-    parser.add_argument('--use_highway_encoder',
+                    help='Whether use a mix of co-attention and self-attention in the model.')
+    parser.add_argument('--use_dynamic_decoder',
                     type=bool,
                     default=False,
-                    help='Whether to use a 2-layer highway encoder between embedding and attention layer')
+                    help='Whether use a Dynamic iterative decoder, as mentioned in Co-Attention paper.')
+        

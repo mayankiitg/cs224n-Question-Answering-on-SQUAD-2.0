@@ -50,7 +50,8 @@ def main(args):
                   use_char_emb=args.use_char_emb,
                   use_dynamic_coattention = args.use_dynamic_coattention,
                   use_self_attention = args.use_self_attention,
-                  use_attention = args.use_attention)
+                  use_attention = args.use_attention,
+                  use_dynamic_decoder=args.use_dynamic_decoder)
     model = nn.DataParallel(model, gpu_ids)
     log.info(f'Loading checkpoint from {args.load_path}...')
     model = util.load_model(model, args.load_path, gpu_ids, return_step=False)
@@ -86,7 +87,56 @@ def main(args):
             # Forward
             log_p1, log_p2 = model(cw_idxs, qw_idxs, cc_idxs, qc_idxs)
             y1, y2 = y1.to(device), y2.to(device)
-            loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
+
+            log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
+            log_p2 = log_p2[:,-1,:]
+
+            st_idx_i_1 = None
+            end_idx_i_1 = None
+            curr_mask_1 = None
+            curr_mask_2 = None
+
+            if len(log_p1.shape) == 3:
+                n_iter = log_p1.shape[1]
+                aggregated_loss = 0
+                for i in range(n_iter):
+                    log_p1_i = log_p1[:,i,:]
+                    log_p2_i = log_p2[:,i,:]
+
+                    step_loss1 = F.nll_loss(log_p1_i, y1, reduce=False) 
+                    step_loss2 =  F.nll_loss(log_p2_i, y2, reduce=False)
+                    
+                    _, st_idx_i = torch.max(log_p1_i, dim=1)
+                    _, end_idx_i = torch.max(log_p2_i, dim=1)
+                    
+                    if curr_mask_1 == None:
+                        curr_mask_1 = (st_idx_i == st_idx_i)
+                        curr_mask_2 = (end_idx_i == end_idx_i)
+                    else:
+                        curr_mask_1 = (st_idx_i != st_idx_i_1) * curr_mask_1
+                        curr_mask_2 = (end_idx_i != end_idx_i_1) * curr_mask_2
+                    
+                    # print('iteration {} mask1: {}, mask2: {}'.format(i, curr_mask_1, curr_mask_2))
+                    # print('st_idx: {}, end: {}'.format(st_idx_i, end_idx_i))
+                    # print(step_loss1, step_loss2)
+
+                    step_loss1 = step_loss1 * curr_mask_1.float()
+                    step_loss2 = step_loss2 * curr_mask_2.float()
+                    
+
+                    aggregated_loss += (step_loss1 + step_loss2)
+                    # print(aggregated_loss)
+
+                    st_idx_i_1 = st_idx_i
+                    end_idx_i_1 = end_idx_i
+                
+                loss = torch.sum(aggregated_loss)
+                # print('aggregated loss: {}'.format(loss))
+                log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
+                log_p2 = log_p2[:,-1,:]
+            else:
+                loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
+                
             nll_meter.update(loss.item(), batch_size)
 
             # Get F1 and EM scores

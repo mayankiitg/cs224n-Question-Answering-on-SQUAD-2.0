@@ -34,11 +34,17 @@
 | Name            | Params  | HyperParams  | Best F1 | Best EM | AvNA | Dev NLL|
 | :---:           |     :-: | :-:          | :-:     | :-:     | :-:  |  :-: |
 | bidaf-baseline-03         | Baseline params | LR 0.5, drop_prob 0.2 | 61.29 | 57.84| 68.01| 3.08|
-| bidaf-char-01         | conv1D with filterSize: 5, out_channels=50, words embedding projected to 50, chars embd of size 50 concat together | LR 0.5, drop_prob 0.2 | 60.95 | 57.79| 67.57| 2.99|
-| bidaf-char-02         | conv1D with filterSize: 3, out_channels=50, relu,batchnorm, dropout, word_emb projected to 50, chars embd of size 50 concat together | LR 0.5, drop_prob 0.2 | 61.87 | 58.39| 67.90| 2.97|
-| bidaf-char-03         | conv1D with filterSize: 3, out_channels=100, relu,batchnorm, words_emb + char_emb conat then projected to 100 | LR 0.5, drop_prob 0.2 |  | | | |
-
-
+| bidaf-char-01         | conv1D with filterSize: 3, out_channels=100, relu,batchnorm, dropout, char_emb + word_emb projected to 100  | LR 0.5, drop_prob 0.2 | 65.64 | 62.58| 71.90| 2.64|
+| bidaf-char-02         | conv1D with filterSize: 3,5 out_channels=100+100, relu,batchnorm, dropout, word_emb + char_emb projected to 100| LR 0.5, drop_prob 0.2 | 67.37 | 64.22| 72.88| 2.59|   
+| bidaf-char01-coattention (baseline-04)         | baseline + char-emb + coattention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  66.81 | 63.27 | 72.90 | 2.67 |
+| bidaf-coattention (coattention-05)         | baseline + coattention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  61.89 | 58.54 | 68.53 | 3.02 |
+| bidaf-selfattention (selfattV2-01)         | baseline + self-attention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  61.49 | 58.36 | 68.19 | 3.04 |
+| bidaf-coSelfattention (coSelfAtt-01)         | baseline + coattention plus self-attention on bi-directinoal attention | LR 0.5, drop_prob 0.2 |  62.84 | 59.27 | 69.53 | 2.98 |
+| bidaf-char02-coSelfattention (coSelfAttCharEmb-01)         | baseline + charemb + attention | LR 0.5, drop_prob 0.2 |  68.23 | 65.7 | 74.09 | 2.51 |
+| bidaf-char02-highway enc (highenc-01)         | baseline + charemb + highway enc C,Q b4 att | LR 0.5, drop_prob 0.2 |  65.83 | 62.17 | 72.09 | 2.77 |
+| bidaf-char02-coSelfBoth (coSelfBoth-01)         | baseline + charemb + co+self att additive+multiplicative | LR 0.5, drop_prob 0.2 |  66.55 | 63.01 | 72.69 | 2.71 |
+| bidaf-AllAttentions-IterativeDecoder         | baseline + charemb + co+self att + Iterative decoder | LR 0.5, drop_prob 0.2 |  66.44 | 63.59 | 72.24 | 10.35/4 |
+| bidaf-char02-coSelfLayerNorm (coSelfBothLayerNorm-01)        | baseline + charemb + co+self with layernorm,resid | LR 0.5, drop_prob 0.2 |  65.94 | 62.58 | 71.84 | 2.71 |
 
 ## Setup
 
