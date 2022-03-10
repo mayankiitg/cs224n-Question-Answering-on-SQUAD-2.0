@@ -130,7 +130,7 @@ def main(args):
                     st_idx_i_1 = st_idx_i
                     end_idx_i_1 = end_idx_i
                 
-                loss = torch.sum(aggregated_loss)
+                loss = torch.mean(aggregated_loss)
                 # print('aggregated loss: {}'.format(loss))
                 log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
                 log_p2 = log_p2[:,-1,:]
