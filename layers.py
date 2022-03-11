@@ -771,7 +771,7 @@ class Multihead_Attention(nn.Module):
             Qbatched = torch.cat(Qpieces, dim=0)  # (heads*N, T_q, head_size)
             Kbatched = torch.cat(Kpieces, dim=0)  # (heads*N, T_k, head_size)
             Vbatched = torch.cat(Vpieces, dim=0)  # (heads*N, T_v, head_size)
-            print("Qbatched.shape, Kbatched.shape, Vbatched.shape = ", Qbatched.shape, Kbatched.shape, Vbatched.shape)
+            # print("Qbatched.shape, Kbatched.shape, Vbatched.shape = ", Qbatched.shape, Kbatched.shape, Vbatched.shape)
 
             # Multiplicative similarity
             outputs = torch.bmm(Qbatched, Kbatched.transpose(2, 1))
@@ -780,15 +780,15 @@ class Multihead_Attention(nn.Module):
             outputs = outputs / (Kbatched.size()[-1] ** 0.5)
 
             # Key, Query Masking
-            print("context_mask, question_mask = ", context_mask.shape, question_mask.shape)
+            # print("context_mask, question_mask = ", context_mask.shape, question_mask.shape)
             # q_mask = torch.unsqueeze(context_mask, -1)
             # k_mask = torch.unsqueeze(question_mask, -2)
             q_mask, k_mask = context_mask.type(torch.float32), question_mask.type(torch.float32)
             # print("q_mask, k_mask = ", q_mask.shape, k_mask.shape)
             masks = torch.bmm(q_mask, k_mask)  # (N, T_q, T_k), torch.bmm doesn't work for bool
             masks = masks.repeat(self.num_heads, 1, 1)  # (heads*N, T_q, T_k)
-            print("masks.shape = ", masks.shape)
-            print("outputs.shape = ", outputs.shape)
+            # print("masks.shape = ", masks.shape)
+            # print("outputs.shape = ", outputs.shape)
 
             similarity = masks * outputs + (1 - masks) * -1e30
             # print("similarity.shape = ", similarity.shape)
@@ -815,7 +815,7 @@ class Multihead_Attention(nn.Module):
             question_att = torch.cat(question_att, dim=2)
             context_coatt = context_coatt.split(N, dim=0)  # (N, T_q, C)
             context_coatt = torch.cat(context_coatt, dim=2)
-            print("context_att.shape, question_att.shape, context_coatt.shape = ", context_att.shape, question_att.shape, context_coatt.shape)
+            # print("context_att.shape, question_att.shape, context_coatt.shape = ", context_att.shape, question_att.shape, context_coatt.shape)
 
             return context_att, question_att, context_coatt
 
@@ -946,7 +946,7 @@ class Attention(nn.Module):
         #scoat3 = torch.bmm(torch.bmm(s2.transpose(1, 2), c))
 
         # BiDAF
-        print("c.shape, a.shape, scoat3.shape, acoat.shape = ", c.shape, a.shape, scoat3.shape, acoat.shape)
+        # print("c.shape, a.shape, scoat3.shape, acoat.shape = ", c.shape, a.shape, scoat3.shape, acoat.shape)
         x = torch.cat([c, a, c * a, c * b, scoat3, acoat], dim=2)  # (bs, c_len, 4 * hid_size) torch.cat([c, a, c * a, c * b, scoat3, acoat], dim=2)  # (bs, c_len, 6 * hid_size)
 
         # self attention
