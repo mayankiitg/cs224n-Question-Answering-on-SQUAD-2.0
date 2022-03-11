@@ -771,7 +771,7 @@ class Multihead_Attention(nn.Module):
             Qbatched = torch.cat(Qpieces, dim=0)  # (heads*N, T_q, head_size)
             Kbatched = torch.cat(Kpieces, dim=0)  # (heads*N, T_k, head_size)
             Vbatched = torch.cat(Vpieces, dim=0)  # (heads*N, T_v, head_size)
-            # print("Qbatched.shape, Kbatched.shape, Vbatched.shape = ", Qbatched.shape, Kbatched.shape, Vbatched.shape)
+            print("Qbatched.shape, Kbatched.shape, Vbatched.shape = ", Qbatched.shape, Kbatched.shape, Vbatched.shape)
 
             # Multiplicative similarity
             outputs = torch.bmm(Qbatched, Kbatched.transpose(2, 1))
@@ -780,12 +780,15 @@ class Multihead_Attention(nn.Module):
             outputs = outputs / (Kbatched.size()[-1] ** 0.5)
 
             # Key, Query Masking
-            q_mask = torch.unsqueeze(context_mask, -1)
-            k_mask = torch.unsqueeze(question_mask, -2)
-            masks = torch.bmm(q_mask, k_mask)  # (N, T_q, T_k)
+            print("context_mask, question_mask = ", context_mask.shape, question_mask.shape)
+            # q_mask = torch.unsqueeze(context_mask, -1)
+            # k_mask = torch.unsqueeze(question_mask, -2)
+            q_mask, k_mask = context_mask.type(torch.float32), question_mask.type(torch.float32)
+            # print("q_mask, k_mask = ", q_mask.shape, k_mask.shape)
+            masks = torch.bmm(q_mask, k_mask)  # (N, T_q, T_k), torch.bmm doesn't work for bool
             masks = masks.repeat(self.num_heads, 1, 1)  # (heads*N, T_q, T_k)
-            # print("masks.shape = ", masks.shape)
-            # print("outputs.shape = ", outputs.shape)
+            print("masks.shape = ", masks.shape)
+            print("outputs.shape = ", outputs.shape)
 
             similarity = masks * outputs + (1 - masks) * -1e30
             # print("similarity.shape = ", similarity.shape)
@@ -802,6 +805,7 @@ class Multihead_Attention(nn.Module):
             # Weighted sum
             context_att = torch.bmm(context_weights, Vbatched)  # ( h*N, T_q, C/h)
             question_att = torch.bmm(question_weights.transpose(-2, -1), Qbatched)
+            context_coatt = torch.bmm(context_weights, question_att)
             # print("context_att.shape, question_att.shape = ", context_att.shape, question_att.shape)
 
             # Restore shape
@@ -809,9 +813,11 @@ class Multihead_Attention(nn.Module):
             context_att = torch.cat(context_att, dim=2)
             question_att = question_att.split(N, dim=0)  # (N, T_q, C)
             question_att = torch.cat(question_att, dim=2)
-            # print("context_att.shape, question_att.shape = ", context_att.shape, question_att.shape)
+            context_coatt = context_coatt.split(N, dim=0)  # (N, T_q, C)
+            context_coatt = torch.cat(context_coatt, dim=2)
+            print("context_att.shape, question_att.shape, context_coatt.shape = ", context_att.shape, question_att.shape, context_coatt.shape)
 
-            return similarity, context_weights, question_weights, context_att, question_att
+            return context_att, question_att, context_coatt
 
         else: # self-attention
 
@@ -841,8 +847,9 @@ class Multihead_Attention(nn.Module):
             outputs = outputs / (Kbatched.size()[-1] ** 0.5)
 
             # Key, Query Masking
-            T_c = context_mask.shape[-1]
-            context_mask = torch.unsqueeze(context_mask, -1)
+            T_c = context_mask.shape[1]
+            #context_mask = torch.unsqueeze(context_mask, -1)
+            context_mask = context_mask.type(torch.float32)
             context_mask = context_mask.repeat(self.num_heads, 1, T_c)
             # print("context_mask.shape, outputs.shape = ", context_mask.shape, outputs.shape)
             similarity = context_mask * outputs + (1 - context_mask) * -1e30
@@ -861,7 +868,7 @@ class Multihead_Attention(nn.Module):
             context_att = context_att.split(N, dim=0)  # (N, T_q, C)
             context_att = torch.cat(context_att, dim=2)
 
-            return similarity, context_weights, context_att
+            return context_att
 
 
 class Attention(nn.Module):
@@ -890,7 +897,7 @@ class Attention(nn.Module):
         # self.p_weight1 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         # self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         self.p2_weight = nn.Parameter(torch.zeros(1, 1, 4*hidden_size))
-        self.multihead_attn = nn.Multihead_Attention(10, hidden_size, 4, dropout=drop_prob, cross=1) # hidden_dim, input_dim=None, num_heads=1, drop_prob=0.2, cross = 1
+        self.multihead_attn = Multihead_Attention(hidden_size, hidden_size, 4, drop_prob=drop_prob, cross=1) # hidden_dim, input_dim=None, num_heads=1, drop_prob=0.2, cross = 1
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         # for weight in (self.p_weight1, self.p_weight2):
@@ -918,14 +925,14 @@ class Attention(nn.Module):
         #qprime1 = F.relu(self.linear1(q))
         #qprime = F.relu(self.linear2(qprime1))
         #scoat = torch.matmul(c , qprime.transpose(1, 2))
-        scoat, scoat2, scoat1, acoat, bcoat = self.multihead_attn(c, q, c_mask, q_mask) # Context, Question=None, context_mask=None, question_mask=None -> similarity, context_weights, question_weights, context_att, question_att
+        acoat, bcoat, scoat3 = self.multihead_attn(c, q, c_mask, q_mask) # Context, Question=None, context_mask=None, question_mask=None -> similarity, context_weights, question_weights, context_att, question_att
         # scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
         # scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
         # # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
         # acoat = torch.bmm(scoat1, q)
         # # (bs, q_len, c_len) x (bs, c_len, hid_size) => (bs, q_len, hid_size)
         # bcoat = torch.bmm(scoat2.transpose(1, 2), c)
-        scoat3 = torch.bmm(scoat1, bcoat)
+        # scoat3 = torch.bmm(scoat1, bcoat)
         # Co-attention stuff
         #qprime1 = F.relu(self.linear1(q))
         #qprime = F.relu(self.linear2(qprime1))
@@ -939,6 +946,7 @@ class Attention(nn.Module):
         #scoat3 = torch.bmm(torch.bmm(s2.transpose(1, 2), c))
 
         # BiDAF
+        print("c.shape, a.shape, scoat3.shape, acoat.shape = ", c.shape, a.shape, scoat3.shape, acoat.shape)
         x = torch.cat([c, a, c * a, c * b, scoat3, acoat], dim=2)  # (bs, c_len, 4 * hid_size) torch.cat([c, a, c * a, c * b, scoat3, acoat], dim=2)  # (bs, c_len, 6 * hid_size)
 
         # self attention
