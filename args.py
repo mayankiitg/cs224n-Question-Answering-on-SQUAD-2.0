@@ -258,6 +258,10 @@ def add_train_test_args(parser):
                     type=bool,
                     default=True,
                     help='Whether use a mix of co-attention and self-attention in the model.')
+    parser.add_argument('--use_hwy_encoder',
+                    type=bool,
+                    default=True,
+                    help='Whether use a hwy encoder after embedding and before attention')
     parser.add_argument('--use_dynamic_decoder',
                     type=bool,
                     default=False,

@@ -49,14 +49,16 @@ class WordAndCharEmbedding(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations
     """
-    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob):
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob, use_hwy_encoder=False):
         super(WordAndCharEmbedding, self).__init__()
         n_filters = hidden_size
         self.drop_prob = drop_prob
+        self.use_hwy_encoder = use_hwy_encoder
         self.word_embed = nn.Embedding.from_pretrained(word_vectors)
         self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob)
         self.proj = nn.Linear(word_vectors.size(1)+2*n_filters, hidden_size, bias=False)
-        self.hwy = HighwayEncoder(2, hidden_size)
+        if use_hwy_encoder:
+            self.hwy = HighwayEncoder(2, hidden_size)
 
     def forward(self, word_idxs, char_idxs):
         word_emb = self.word_embed(word_idxs)   # (batch_size, seq_len, embed_size)
@@ -69,11 +71,12 @@ class WordAndCharEmbedding(nn.Module):
         emb = torch.cat((word_emb, char_emb), dim=2)  # (batch_size, seq_len, 350)
         assert(emb.size()[2] == word_emb.size()[2] + char_emb.size()[2])
 
-        emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
+        if self.use_hwy_encoder:
+            emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
 
         # emb = F.dropout(emb, self.drop_prob, self.training) # ToDo: Should we apply dropout collectively here?
 
-        emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
+        # emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
 
         return emb
 
@@ -887,9 +890,10 @@ class Attention(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations.
     """
-    def __init__(self, hidden_size, drop_prob=0.1):
+    def __init__(self, hidden_size, drop_prob=0.1, use_self_attention=False):
         super().__init__()
         self.drop_prob = drop_prob
+        self.use_self_attention = use_self_attention
         # self.linear1 = nn.Linear(hidden_size, hidden_size)
         # self.linear2 = nn.Linear(hidden_size, hidden_size)
         self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
@@ -899,7 +903,8 @@ class Attention(nn.Module):
         # self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         self.p2_weight = nn.Parameter(torch.zeros(1, 1, 4*hidden_size))
         self.multihead_attn = Multihead_Attention(hidden_size, hidden_size, 8, drop_prob=drop_prob, cross=1) # hidden_dim, input_dim=None, num_heads=1, drop_prob=0.2, cross = 1
-        self.multihead_self = Multihead_Attention(hidden_size, 6*hidden_size, 8, drop_prob=drop_prob, cross=0)
+        if use_self_attention:
+            self.multihead_self = Multihead_Attention(hidden_size, 6*hidden_size, 8, drop_prob=drop_prob, cross=0)
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         # for weight in (self.p_weight1, self.p_weight2):
@@ -955,9 +960,11 @@ class Attention(nn.Module):
         # ss = self.get_self_similarity_matrix(x) # (bs, c_len, c_len)
         # ss1 = masked_softmax(ss, c_mask, dim=1)
         # patt = torch.bmm(ss1, x)
-        patt = self.multihead_self(x, context_mask = c_mask) + x
-
-        return patt
+        if self.use_self_attention:
+            patt = self.multihead_self(x, context_mask = c_mask) + x
+            return patt
+        else:
+            return x
 
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
