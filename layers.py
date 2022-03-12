@@ -892,28 +892,28 @@ class Attention(nn.Module):
         self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.cq_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
+
         # self.p_weight1 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         # self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, 1))
-        self.p2_weight = nn.Parameter(torch.zeros(1, 1, 4*hidden_size))
-        self.multihead_attn = Multihead_Attention(hidden_size, hidden_size, 4, drop_prob=drop_prob, cross=1) # hidden_dim, input_dim=None, num_heads=1, drop_prob=0.2, cross = 1
+        # self.p2_weight = nn.Parameter(torch.zeros(1, 1, 4*hidden_size))
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
+
         self.use_multihead = use_multihead
         if not self.use_multihead:
             self.linear1 = nn.Linear(hidden_size, hidden_size)
             self.linear2 = nn.Linear(hidden_size, hidden_size)
             for weight in (self.p_weight1, self.p_weight2):
                 nn.init.xavier_uniform_(weight)
+        else:
+            self.multihead_attn = Multihead_Attention(hidden_size, hidden_size, 4, drop_prob=drop_prob, cross=1) # hidden_dim, input_dim=None, num_heads=1, drop_prob=0.2, cross = 1
+        
 
-        # self.pbias = nn.Parameter(torch.zeros(1))
 
     def forward(self, c, q, c_mask, q_mask):
         batch_size, c_len, _ = c.size()
-        q_len = q.size(1)
-
-        s = self.get_similarity_matrix(c, q)       # (batch_size, c_len, q_len)
-
+        q_len = q.size(1)s = self.get_similarity_matrix(c, q)        # (batch_size, c_len, q_len)
         c_mask = c_mask.view(batch_size, c_len, 1)  # (batch_size, c_len, 1)
         q_mask = q_mask.view(batch_size, 1, q_len)  # (batch_size, 1, q_len)
         s1 = masked_softmax(s, q_mask, dim=2)       # (batch_size, c_len, q_len)
@@ -925,9 +925,6 @@ class Attention(nn.Module):
         b = torch.bmm(torch.bmm(s1, s2.transpose(1, 2)), c)
 
         # Co-attention stuff
-        #qprime1 = F.relu(self.linear1(q))
-        #qprime = F.relu(self.linear2(qprime1))
-        #scoat = torch.matmul(c , qprime.transpose(1, 2))
         if self.use_multihead:
             acoat, bcoat, scoat3 = self.multihead_attn(c, q, c_mask, q_mask) # Context, Question=None, context_mask=None, question_mask=None -> similarity, context_weights, question_weights, context_att, question_att
         else:
@@ -954,11 +951,6 @@ class Attention(nn.Module):
         #scoat = torch.matmul(c , qprime.transpose(1, 2))
         #scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
         #scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
-        # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
-        #acoat = torch.bmm(scoat1, qprime)
-        # (bs, q_len, c_len) x (bs, c_len, hid_size) => (bs, q_len, hid_size)
-        #bcoat = torch.bmm(scoat2.transpose(1, 2), c)
-        #scoat3 = torch.bmm(torch.bmm(s2.transpose(1, 2), c))
 
         # BiDAF
         #  print("c.shape, a.shape, scoat3.shape, acoat.shape = ", c.shape, a.shape, scoat3.shape, acoat.shape)
@@ -995,32 +987,27 @@ class Attention(nn.Module):
 
         return s
 
-    # def get_self_similarity_matrix(self, b):
-    #     """Get the "similarity matrix" between context and query (using the
-    #     terminology of the BiDAF paper).
-    #
-    #     A naive implementation as described in BiDAF would concatenate the
-    #     three vectors then project the result with a single weight matrix. This
-    #     method is a more memory-efficient implementation of the same operation.
-    #
-    #     See Also:
-    #         Equation 1 in https://arxiv.org/abs/1611.01603
-    #     """
-    #     b_len= b.size(1)
-    #     b = F.dropout(b, self.drop_prob, self.training)  # (bs, c_len, hid_size)
-    #     #q = F.dropout(q, self.drop_prob, self.training)  # (bs, q_len, hid_size)
-    #
-    #     # Shapes: (batch_size, c_len, q_len)
-    #     s0a = torch.matmul(b, self.p_weight1) # (bs, c_len, sqrt(hidden_size))
-    #     s1a = torch.matmul(b, self.p_weight2) # (bs, c_len, sqrt(hidden_size))
-    #     sa = torch.matmul(s0a, s1a.transpose(1, 2)) # (bs, c_len, c_len)
-    #
-    #     s0 = torch.matmul(b, self.p_weight1).expand([-1, -1, b_len])
-    #     s1 = torch.matmul(b, self.p_weight2).transpose(1, 2)\
-    #                                        .expand([-1, b_len, -1])
-    #     s2 = torch.matmul(b * self.p2_weight, b.transpose(1, 2))
-    #     s = s0 + s1 + s2 + self.pbias + sa
-    #     return s
+    def get_self_similarity_matrix(self, b):
+        """Get the "similarity matrix" between context and query (using the
+        terminology of the BiDAF paper).
+
+        A naive implementation as described in BiDAF would concatenate the
+        three vectors then project the result with a single weight matrix. This
+        method is a more memory-efficient implementation of the same operation.
+
+        See Also:
+            Equation 1 in https://arxiv.org/abs/1611.01603
+        """
+        b_len= b.size(1)
+        b = F.dropout(b, self.drop_prob, self.training)  # (bs, c_len, hid_size)
+        #q = F.dropout(q, self.drop_prob, self.training)  # (bs, q_len, hid_size)
+
+        # Shapes: (batch_size, c_len, q_len)
+        s0 = torch.matmul(b, self.p_weight1) # (bs, c_len, sqrt(hidden_size))
+        s1 = torch.matmul(b, self.p_weight2) # (bs, c_len, sqrt(hidden_size))
+        s = torch.matmul(s0, s1.transpose(1, 2)) # (bs, c_len, c_len)
+
+        return s
 
 
 class AttentionOutput(nn.Module):
@@ -1132,36 +1119,54 @@ class IterativeDecoderOutput(nn.Module):
         hidden_size (int): Hidden size used in the BiDAF model.
         drop_prob (float): Probability of zero-ing out activations.
     """
-    def __init__(self, hidden_size, att_out_dim, mod_out_dim, max_decode_steps, maxout_pool_size, drop_prob):
+    def __init__(self, hidden_size, att_out_dim, mod_out_dim, max_decode_steps, maxout_pool_size, older_out_layer, drop_prob):
         super().__init__()
         self.max_decode_steps = max_decode_steps
         self.att_out_dim = att_out_dim
         self.hidden_size = hidden_size
         self.mod_out_dim = mod_out_dim
 
-        # input to RNN will be: [u_s_i-1 ; u_e_i-1]
-        # self.decoder = RNNEncoder(2 * mod_out_dim, hidden_size, 1, drop_prob=drop_prob, bidirectional=False)
-        self.decoder = nn.LSTMCell(2 * mod_out_dim, hidden_size, bias=True)
+        ### Either enable or disable this.
+        # self.fuse_att_mod = False
 
+        # if self.fuse_att_mod:
+        #     self.mod_out_dim = self.mod_out_dim + self.att_out_dim
+
+        # input to RNN will be: [u_s_i-1 ; u_e_i-1] 
+        # self.decoder = RNNEncoder(2 * mod_out_dim, hidden_size, 1, drop_prob=drop_prob, bidirectional=False)
+        self.decoder = nn.LSTMCell(2 * self.mod_out_dim, hidden_size, bias=True)
+
+        self.olderDecoder = older_out_layer
+       
         # some people forget the biases, and initialize lstm with that.
         # see if its required.
 
-        self.HMN_start = HighwayMaxoutNetwork(mod_out_dim, hidden_size, maxout_pool_size)
-        self.HMN_end = HighwayMaxoutNetwork(mod_out_dim, hidden_size, maxout_pool_size)
-
+        self.HMN_start = HighwayMaxoutNetwork(self.mod_out_dim, hidden_size, maxout_pool_size)
+        self.HMN_end = HighwayMaxoutNetwork(self.mod_out_dim, hidden_size, maxout_pool_size)
 
     def forward(self, att, mod, mask):
 
         # att:  (batch_size, seq_len, att_enc_size)
         # mod:  (batch_size, seq_len, mod_out_size)
         # mask: (batch_size, seq_len)
+        
+        # if self.fuse_att_mod:
+        #     mod = torch.cat((mod, att), dim=2)
 
         (batch_size, seq_len, _) = mod.shape
 
+        log_p1, log_p2 = self.olderDecoder(att, mod, mask)
+
+        _, s_prev = torch.max(log_p1, dim = 1)
+        _, e_prev = torch.max(log_p2, dim = 1)
+
         # how to initialize s_prev, e_prev? Its not mentioned in paper.
-        s_prev = torch.zeros(batch_size, ).long() # (batch_size, )
-        e_prev = torch.sum(mask, 1) - 1           # (batch_size, )
+        # s_prev = torch.zeros(batch_size, ).long() # (batch_size, )
+        # e_prev = torch.sum(mask, 1) - 1           # (batch_size, )
         dec_state_i = None
+
+        assert(s_prev.shape == (batch_size, ))
+        assert(e_prev.shape == (batch_size, ))
 
         batch_idxs = torch.arange(0, batch_size, out=torch.LongTensor(batch_size))
 

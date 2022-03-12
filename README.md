@@ -45,6 +45,13 @@
 | bidaf-char02-coSelfBoth (coSelfBoth-01)         | baseline + charemb + co+self att additive+multiplicative | LR 0.5, drop_prob 0.2 |  66.55 | 63.01 | 72.69 | 2.71 |
 | bidaf-AllAttentions-IterativeDecoder         | baseline + charemb + co+self att + Iterative decoder | LR 0.5, drop_prob 0.2 |  66.44 | 63.59 | 72.24 | 10.35/4 |
 | bidaf-char02-coSelfLayerNorm (coSelfBothLayerNorm-01)        | baseline + charemb + co+self with layernorm,resid | LR 0.5, drop_prob 0.2 |  65.94 | 62.58 | 71.84 | 2.71 |
+| bidaf-best-model-hyperparam-1        | baseline + charemb + co+self + hyper param tuning | LR: 0.8**(2 *s//15000), drop_prob 0.3 |  64.30 | 60.73 | 70.58 | 2.74 |
+| bidaf-char-iterative-decoder-step-loss | baseline + charemb + iterative decoder with step loss | LR: 0.5 till 1M, then exp decay, drop_prob 0.2 |  66.47 | 63.27 | 72.41 | 2.58 |
+| Best model - dropout 0.3 | baseline + charemb + all att | LR: 0.5 till 1M, then exp decay, drop_prob 0.3 | 64.30  | 60.73 | 70.58 | 2.74 |
+| Best model - dropout 0.15 | baseline + charemb + all att | LR: 0.5 till 1M, then exp decay, drop_prob 0.15 |  66.03 | 63.15 | 71.53 | 2.51 |
+| bidaf-char02-multiHeadCoatt | baseline + charemb + multiHead coatt | LR: 0.5 , drop_prob 0.2 |  68.27 | 64.75 | 74.73 | 2.69 |
+| bidaf-char02-multiHeadCoatt | baseline + charemb + multiHead coatt plus self-att | LR: 0.5 , drop_prob 0.2 |  63.46 | 60.31 | 69.65 | 2.70 |
+
 
 ## Setup
 

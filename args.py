@@ -168,8 +168,8 @@ def get_test_args():
 
     # Require load_path for test.py
     args = parser.parse_args()
-    if not args.load_path:
-        raise argparse.ArgumentError('Missing required argument --load_path')
+    # if not args.load_path:
+    #     raise argparse.ArgumentError('Missing required argument --load_path')
 
     return args
 
@@ -249,11 +249,11 @@ def add_train_test_args(parser):
     parser.add_argument('--use_dynamic_coattention',
                     type=bool,
                     default=False,
-                    help='Whether to use dynamic coattention in the model.')
+                    help='Whether use dynamic coattention in the model.')
     parser.add_argument('--use_self_attention',
                     type=bool,
                     default=False,
-                    help='Whether to use self attention in the model.')
+                    help='Whether use self attention in the model.')
     parser.add_argument('--use_attention',
                     type=bool,
                     default=True,

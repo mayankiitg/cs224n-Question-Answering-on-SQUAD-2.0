@@ -334,17 +334,12 @@ def load_model(model, checkpoint_path, gpu_ids, return_step=True):
     """
     device = f"cuda:{gpu_ids[0]}" if gpu_ids else 'cpu'
     ckpt_dict = torch.load(checkpoint_path, map_location=device)
-    model_dict = model.state_dict()
 
     # Build model, load parameters
-    #filter out unnecessary keys
-    ckpt_dict_cut1 = {k:v for k, v in ckpt_dict['model_state'].items() if k in model_dict}
-    ckpt_dict_cut = {k:v for k, v in ckpt_dict_cut1.items() if ckpt_dict_cut1[k].shape==model_dict[k].shape}
-    model_dict.update(ckpt_dict_cut)
-    model.load_state_dict(model_dict)
+    model.load_state_dict(ckpt_dict['model_state'])
 
     if return_step:
-        step = 0 #ckpt_dict['step']
+        step = ckpt_dict['step']
         return model, step
 
     return model
