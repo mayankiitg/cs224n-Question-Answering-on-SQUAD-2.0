@@ -258,16 +258,22 @@ def add_train_test_args(parser):
                     type=bool,
                     default=True,
                     help='Whether use a mix of co-attention and self-attention in the model.')
+    parser.add_argument('--use_hwy_encoder',
+                    type=bool,
+                    default=True,
+                    help='Whether use a hwy encoder after embedding and before attention')
     parser.add_argument('--use_dynamic_decoder',
                     type=bool,
                     default=False,
                     help='Whether use a Dynamic iterative decoder, as mentioned in Co-Attention paper.')
-        
     parser.add_argument('--use_multihead',
                     type=bool,
                     default=False,
                     help='Whether use multiheaded coattention')
-
+    parser.add_argument('--multihead_count',
+                    type=int,
+                    default=4,
+                    help='count of heads in coatt')
     parser.add_argument('--use_2_conv_filters',
                 type=bool,
                 default=True,

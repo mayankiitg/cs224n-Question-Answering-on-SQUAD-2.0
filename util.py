@@ -338,11 +338,13 @@ def load_model(model, checkpoint_path, gpu_ids, return_step=True):
 
     # Build model, load parameters
     #filter out unnecessary keys
-    ckpt_dict_cut = {k:v for k, v in ckpt_dict['model_state'].items() if k in model_dict}
-    model.load_state_dict(ckpt_dict_cut)
+    ckpt_dict_cut1 = {k:v for k, v in ckpt_dict['model_state'].items() if k in model_dict}
+    ckpt_dict_cut = {k:v for k, v in ckpt_dict_cut1.items() if ckpt_dict_cut1[k].shape==model_dict[k].shape}
+    model_dict.update(ckpt_dict_cut)
+    model.load_state_dict(model_dict)
 
     if return_step:
-        step = ckpt_dict['step']
+        step = 0 #ckpt_dict['step']
         return model, step
 
     return model
