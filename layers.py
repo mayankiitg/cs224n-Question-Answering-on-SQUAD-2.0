@@ -49,13 +49,13 @@ class WordAndCharEmbedding(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations
     """
-    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob):
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob, use_2_conv_filters = True):
         super(WordAndCharEmbedding, self).__init__()
         n_filters = hidden_size
         self.drop_prob = drop_prob
         self.word_embed = nn.Embedding.from_pretrained(word_vectors)
-        self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob)
-        self.proj = nn.Linear(word_vectors.size(1)+2*n_filters, hidden_size, bias=False)
+        self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob, use_2_conv_filters=use_2_conv_filters)
+        self.proj = nn.Linear(word_vectors.size(1)+(1+use_2_conv_filters)*n_filters, hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
 
     def forward(self, word_idxs, char_idxs):
@@ -83,11 +83,12 @@ class CharEmbedding(nn.Module):
     Args:
         char_vectors (torch.Tensor): Pre-trained char vectors.
     """
-    def __init__(self, char_vectors, n_filters, kernel_size, drop_prob):
+    def __init__(self, char_vectors, n_filters, kernel_size, drop_prob, use_2_conv_filters):
         super(CharEmbedding, self).__init__()
 
         self.n_filters = n_filters
         self.drop_prob = drop_prob
+        self.use_2_conv_filters = use_2_conv_filters
 
         self.char_embed = nn.Embedding.from_pretrained(char_vectors) # do we want to freeze char embeddings as well?
 
@@ -109,17 +110,18 @@ class CharEmbedding(nn.Module):
             nn.AdaptiveMaxPool1d(1), #We want to max pool on last dimension (i.e. over ther char sequence, along the width of the word) and we want to pick 1 max value.
         )
 
-        self.conv2 = nn.Sequential(
-            nn.Conv1d(
-                in_channels=char_vectors.size(1),
-                out_channels=n_filters,
-                kernel_size=5,
-            ),
-            nn.ReLU(),
-            # nn.Dropout(drop_prob),
-            nn.BatchNorm1d(num_features=n_filters), # some people claimed it helped them.
-            nn.AdaptiveMaxPool1d(1), #We want to max pool on last dimension (i.e. over ther char sequence, along the width of the word) and we want to pick 1 max value.
-        )
+        if use_2_conv_filters:
+            self.conv2 = nn.Sequential(
+                nn.Conv1d(
+                    in_channels=char_vectors.size(1),
+                    out_channels=n_filters,
+                    kernel_size=5,
+                ),
+                nn.ReLU(),
+                # nn.Dropout(drop_prob),
+                nn.BatchNorm1d(num_features=n_filters), # some people claimed it helped them.
+                nn.AdaptiveMaxPool1d(1), #We want to max pool on last dimension (i.e. over ther char sequence, along the width of the word) and we want to pick 1 max value.
+            )
 
     def forward(self, x):
         #ToDo: Are Reshapes costly operations? Looksmlike they copy objects, keeping old ones around. maybe we should use Views?
@@ -144,12 +146,15 @@ class CharEmbedding(nn.Module):
         emb1 = emb1.reshape(x.shape[0], x.shape[1], -1) # (batch_size, seq_len, out_channels=50)
         assert(emb1.shape == ((batch_size, seq_len, self.n_filters)))
 
-        emb2: torch.Tensor = self.conv2(emb)
-        emb2.squeeze(-1) # (batch_size * seq_len, out_channels=50)
-        emb2 = emb2.reshape(x.shape[0], x.shape[1], -1) # (batch_size, seq_len, out_channels=50)
-        assert(emb2.shape == ((batch_size, seq_len, self.n_filters)))
+        if self.use_2_conv_filters:
+            emb2: torch.Tensor = self.conv2(emb)
+            emb2.squeeze(-1) # (batch_size * seq_len, out_channels=50)
+            emb2 = emb2.reshape(x.shape[0], x.shape[1], -1) # (batch_size, seq_len, out_channels=50)
+            assert(emb2.shape == ((batch_size, seq_len, self.n_filters)))
 
-        emb = torch.cat((emb1, emb2), dim = 2)
+            emb = torch.cat((emb1, emb2), dim = 2)
+        else:
+            emb = emb1
 
         return emb
 
@@ -974,6 +979,13 @@ class IterativeDecoderOutput(nn.Module):
         self.hidden_size = hidden_size
         self.mod_out_dim = mod_out_dim
 
+        ## Either enable or disable this.
+        self.fuse_att_mod = False
+
+        if self.fuse_att_mod:
+            self.att_mod_proj = nn.Linear(self.mod_out_dim + self.att_out_dim, self.mod_out_dim)
+            # self.mod_out_dim = self.mod_out_dim + self.att_out_dim
+
         # input to RNN will be: [u_s_i-1 ; u_e_i-1] 
         # self.decoder = RNNEncoder(2 * mod_out_dim, hidden_size, 1, drop_prob=drop_prob, bidirectional=False)
         self.decoder = nn.LSTMCell(2 * mod_out_dim, hidden_size, bias=True)
@@ -993,9 +1005,17 @@ class IterativeDecoderOutput(nn.Module):
 
         (batch_size, seq_len, _) = mod.shape
 
+        log_p1, log_p2 = self.olderDecoder(att, mod, mask)
+
+        if self.fuse_att_mod:
+            mod = self.att_mod_proj(torch.cat((mod, att), dim=2))
+
+        _, s_prev = torch.max(log_p1, dim = 1)
+        _, e_prev = torch.max(log_p2, dim = 1)
+
         # how to initialize s_prev, e_prev? Its not mentioned in paper.
-        s_prev = torch.zeros(batch_size, ).long() # (batch_size, )
-        e_prev = torch.sum(mask, 1) - 1           # (batch_size, )
+        # s_prev = torch.zeros(batch_size, ).long() # (batch_size, )
+        # e_prev = torch.sum(mask, 1) - 1           # (batch_size, )
         dec_state_i = None
 
         batch_idxs = torch.arange(0, batch_size, out=torch.LongTensor(batch_size))

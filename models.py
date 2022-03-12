@@ -31,7 +31,7 @@ class BiDAF(nn.Module):
         drop_prob (float): Dropout probability.
     """
 
-    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, use_attention, use_dynamic_decoder, drop_prob=0.):
+    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, use_attention, use_dynamic_decoder, drop_prob=0.,use_2_conv_filters = True):
 
         super(BiDAF, self).__init__()
         print("initializing Bidaf!")
@@ -50,7 +50,8 @@ class BiDAF(nn.Module):
             self.emb = layers.WordAndCharEmbedding(word_vectors=word_vectors,
                                         char_vectors=char_vectors,
                                         hidden_size=hidden_size,
-                                        drop_prob=drop_prob)
+                                        drop_prob=drop_prob,
+                                        use_2_conv_filters = use_2_conv_filters)
         else:
             self.emb = layers.Embedding(word_vectors=word_vectors,
                                         hidden_size=hidden_size,

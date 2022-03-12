@@ -89,7 +89,7 @@ def main(args):
     lambda1 = lambda s: 1 if s < 15000 else 0.8 ** (2 * s//lr_step) # exponential decreasing learning rate
     lambda2 = lambda s: 1 # Constant Learning rate.
 
-    scheduler = sched.LambdaLR(optimizer, lambda1)  # Constant LR
+    scheduler = sched.LambdaLR(optimizer, lambda2)  # Constant LR
 
     # Get data loader
     log.info('Building dataset...')

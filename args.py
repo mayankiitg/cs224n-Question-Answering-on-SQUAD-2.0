@@ -263,3 +263,12 @@ def add_train_test_args(parser):
                     default=False,
                     help='Whether use a Dynamic iterative decoder, as mentioned in Co-Attention paper.')
         
+    parser.add_argument('--use_multihead',
+                    type=bool,
+                    default=False,
+                    help='Whether use multiheaded coattention')
+
+    parser.add_argument('--use_2_conv_filters',
+                type=bool,
+                default=True,
+                help='Whether use a Dynamic iterative decoder, as mentioned in Co-Attention paper.')
