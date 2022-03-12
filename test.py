@@ -53,6 +53,7 @@ def main(args):
                   use_attention = args.use_attention,
                   use_dynamic_decoder=args.use_dynamic_decoder,
                   use_hwy_encoder = args.use_hwy_encoder,
+                  use_multihead = args.use_multihead,
                   multihead_count = args.multihead_count)
     model = nn.DataParallel(model, gpu_ids)
     log.info(f'Loading checkpoint from {args.load_path}...')
