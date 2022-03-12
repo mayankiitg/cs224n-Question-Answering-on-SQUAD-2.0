@@ -890,7 +890,7 @@ class Attention(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations.
     """
-    def __init__(self, hidden_size, drop_prob=0.1, use_self_attention=False):
+    def __init__(self, hidden_size, drop_prob=0.1, use_self_attention=False, multihead_count = 4):
         super().__init__()
         self.drop_prob = drop_prob
         self.use_self_attention = use_self_attention
@@ -902,9 +902,9 @@ class Attention(nn.Module):
         # self.p_weight1 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         # self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         self.p2_weight = nn.Parameter(torch.zeros(1, 1, 4*hidden_size))
-        self.multihead_attn = Multihead_Attention(hidden_size, hidden_size, 8, drop_prob=drop_prob, cross=1) # hidden_dim, input_dim=None, num_heads=1, drop_prob=0.2, cross = 1
+        self.multihead_attn = Multihead_Attention(hidden_size, hidden_size, multihead_count, drop_prob=drop_prob, cross=1) # hidden_dim, input_dim=None, num_heads=1, drop_prob=0.2, cross = 1
         if use_self_attention:
-            self.multihead_self = Multihead_Attention(hidden_size, 6*hidden_size, 8, drop_prob=drop_prob, cross=0)
+            self.multihead_self = Multihead_Attention(hidden_size, 6*hidden_size, multihead_count, drop_prob=drop_prob, cross=0)
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         # for weight in (self.p_weight1, self.p_weight2):

@@ -56,7 +56,8 @@ def main(args):
                   use_self_attention = args.use_self_attention,
                   use_attention = args.use_attention,
                   use_dynamic_decoder=args.use_dynamic_decoder,
-                  use_hwy_encoder = args.use_hwy_encoder)
+                  use_hwy_encoder = args.use_hwy_encoder,
+                  multihead_count = args.multihead_count)
 
 
     model = nn.DataParallel(model, args.gpu_ids)

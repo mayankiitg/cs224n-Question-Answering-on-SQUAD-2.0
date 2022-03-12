@@ -266,3 +266,7 @@ def add_train_test_args(parser):
                     type=bool,
                     default=False,
                     help='Whether use a Dynamic iterative decoder, as mentioned in Co-Attention paper.')
+    parser.add_argument('--multihead_count',
+                    type=bool,
+                    default=4,
+                    help='count of heads in coatt')                
