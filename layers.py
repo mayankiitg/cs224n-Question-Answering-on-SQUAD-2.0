@@ -886,11 +886,9 @@ class Attention(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations.
     """
-    def __init__(self, hidden_size, drop_prob=0.1):
+    def __init__(self, hidden_size, drop_prob=0.1, use_multihead=False):
         super().__init__()
         self.drop_prob = drop_prob
-        # self.linear1 = nn.Linear(hidden_size, hidden_size)
-        # self.linear2 = nn.Linear(hidden_size, hidden_size)
         self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.cq_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
@@ -900,9 +898,14 @@ class Attention(nn.Module):
         self.multihead_attn = Multihead_Attention(hidden_size, hidden_size, 4, drop_prob=drop_prob, cross=1) # hidden_dim, input_dim=None, num_heads=1, drop_prob=0.2, cross = 1
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
-        # for weight in (self.p_weight1, self.p_weight2):
-        #     nn.init.xavier_uniform_(weight)
         self.bias = nn.Parameter(torch.zeros(1))
+        self.use_multihead = use_multihead
+        if not self.use_multihead:
+            self.linear1 = nn.Linear(hidden_size, hidden_size)
+            self.linear2 = nn.Linear(hidden_size, hidden_size)
+            for weight in (self.p_weight1, self.p_weight2):
+                nn.init.xavier_uniform_(weight)
+
         # self.pbias = nn.Parameter(torch.zeros(1))
 
     def forward(self, c, q, c_mask, q_mask):
@@ -925,7 +928,19 @@ class Attention(nn.Module):
         #qprime1 = F.relu(self.linear1(q))
         #qprime = F.relu(self.linear2(qprime1))
         #scoat = torch.matmul(c , qprime.transpose(1, 2))
-        acoat, bcoat, scoat3 = self.multihead_attn(c, q, c_mask, q_mask) # Context, Question=None, context_mask=None, question_mask=None -> similarity, context_weights, question_weights, context_att, question_att
+        if self.use_multihead:
+            acoat, bcoat, scoat3 = self.multihead_attn(c, q, c_mask, q_mask) # Context, Question=None, context_mask=None, question_mask=None -> similarity, context_weights, question_weights, context_att, question_att
+        else:
+            qprime1 = F.relu(self.linear1(q))
+            qprime = F.relu(self.linear2(qprime1))
+            scoat = torch.matmul(c , qprime.transpose(1, 2))
+            scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
+            scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
+            # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
+            acoat = torch.bmm(scoat1, qprime)
+            # (bs, q_len, c_len) x (bs, c_len, hid_size) => (bs, q_len, hid_size)
+            bcoat = torch.bmm(scoat2.transpose(1, 2), c)
+            scoat = torch.bmm(scoat1, bcoat)
         # scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
         # scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
         # # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
@@ -946,7 +961,7 @@ class Attention(nn.Module):
         #scoat3 = torch.bmm(torch.bmm(s2.transpose(1, 2), c))
 
         # BiDAF
-        # print("c.shape, a.shape, scoat3.shape, acoat.shape = ", c.shape, a.shape, scoat3.shape, acoat.shape)
+        #  print("c.shape, a.shape, scoat3.shape, acoat.shape = ", c.shape, a.shape, scoat3.shape, acoat.shape)
         x = torch.cat([c, a, c * a, c * b, scoat3, acoat], dim=2)  # (bs, c_len, 4 * hid_size) torch.cat([c, a, c * a, c * b, scoat3, acoat], dim=2)  # (bs, c_len, 6 * hid_size)
 
         # self attention
