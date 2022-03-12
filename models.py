@@ -30,13 +30,16 @@ class BiDAF(nn.Module):
         hidden_size (int): Number of features in the hidden state at each layer.
         drop_prob (float): Dropout probability.
     """
-    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, use_attention, use_dynamic_decoder, drop_prob=0.):
+    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, use_attention, use_dynamic_decoder, use_hwy_encoder, use_multihead, multihead_count, drop_prob=0.,use_2_conv_filters = True):
         super(BiDAF, self).__init__()
         print("initializing Bidaf!")
         self.use_dynamic_coattention = use_dynamic_coattention
         self.use_self_attention = use_self_attention
         self.use_attention = use_attention
         self.use_dynamic_decoder = use_dynamic_decoder
+        self.use_hwy_encoder = use_hwy_encoder
+        self.use_multihead = use_multihead
+        self.multihead_count = multihead_count
 
         att_out_dim = 0
         mod_out_dim = 0
@@ -46,7 +49,9 @@ class BiDAF(nn.Module):
             self.emb = layers.WordAndCharEmbedding(word_vectors=word_vectors,
                                         char_vectors=char_vectors,
                                         hidden_size=hidden_size,
-                                        drop_prob=drop_prob)
+                                        drop_prob=drop_prob,
+                                        use_hwy_encoder = use_hwy_encoder,
+                                        use_2_conv_filters = use_2_conv_filters)
         else:
             self.emb = layers.Embedding(word_vectors=word_vectors,
                                         hidden_size=hidden_size,
@@ -71,25 +76,13 @@ class BiDAF(nn.Module):
 
             att_out_dim = 12 * hidden_size
             mod_out_dim = 2 * hidden_size
-        elif self.use_self_attention:
-            print("Using passage self-attention!")
-            self.att = layers.SelfAttention(hidden_size=2 * hidden_size,
-                                             drop_prob=drop_prob)
-
-            self.mod = layers.RNNEncoder(input_size=8 * hidden_size,
-                                         hidden_size=hidden_size,
-                                         num_layers=2,
-                                         drop_prob=drop_prob)
-
-            self.out = layers.BiDAFOutput(hidden_size=hidden_size,
-                                          drop_prob=drop_prob)
-            
-            att_out_dim = 8 * hidden_size
-            mod_out_dim = 2 * hidden_size
         elif self.use_attention:
             print("Using coattent plus passage self-attention!")
             self.att = layers.Attention(hidden_size=2 * hidden_size,
-                                             drop_prob=drop_prob)
+                                             drop_prob=drop_prob,
+                                             use_self_attention = use_self_attention,
+                                             use_multihead = use_multihead,
+                                             multihead_count = multihead_count)
 
             self.mod = layers.RNNEncoder(input_size=12 * hidden_size,
                                          hidden_size=hidden_size,
@@ -112,7 +105,7 @@ class BiDAF(nn.Module):
 
             self.out = layers.BiDAFOutput(hidden_size=hidden_size,
                                           drop_prob=drop_prob)
-                                          
+
             att_out_dim = 8 * hidden_size
             mod_out_dim = 2 * hidden_size
 
