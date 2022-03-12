@@ -87,7 +87,12 @@ def main(args):
     # Get optimizer and scheduler
     optimizer = optim.Adadelta(model.parameters(), args.lr,
                                weight_decay=args.l2_wd)
-    scheduler = sched.LambdaLR(optimizer, lambda s: 1.)  # Constant LR
+
+    lr_step = 15000 # change the learning rate after every 1 million steps (15000*64)
+    lambda1 = lambda s: 1 if s < 15000 else 0.8 ** (2 * s//lr_step) # exponential decreasing learning rate
+    lambda2 = lambda s: 1 # Constant Learning rate.
+
+    scheduler = sched.LambdaLR(optimizer, lambda2)  # Constant LR
 
     # Get data loader
     log.info('Building dataset...')
@@ -170,8 +175,8 @@ def main(args):
 
                         st_idx_i_1 = st_idx_i
                         end_idx_i_1 = end_idx_i
-
-                    loss = torch.sum(aggregated_loss)
+                    
+                    loss = torch.mean(aggregated_loss)
                     # print('aggregated loss: {}'.format(loss))
                     log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
                     log_p2 = log_p2[:,-1,:]
@@ -286,8 +291,8 @@ def evaluate(model, data_loader, device, eval_file, max_len, use_squad_v2):
 
                     st_idx_i_1 = st_idx_i
                     end_idx_i_1 = end_idx_i
-
-                loss = torch.sum(aggregated_loss)
+                
+                loss = torch.mean(aggregated_loss)
                 # print('aggregated loss: {}'.format(loss))
                 log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
                 log_p2 = log_p2[:,-1,:]

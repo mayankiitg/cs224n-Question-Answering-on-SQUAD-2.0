@@ -30,7 +30,7 @@ class BiDAF(nn.Module):
         hidden_size (int): Number of features in the hidden state at each layer.
         drop_prob (float): Dropout probability.
     """
-    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, use_attention, use_dynamic_decoder, use_hwy_encoder, use_multihead, multihead_count, drop_prob=0.):
+    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, use_attention, use_dynamic_decoder, use_hwy_encoder, use_multihead, multihead_count, drop_prob=0.,use_2_conv_filters = True):
         super(BiDAF, self).__init__()
         print("initializing Bidaf!")
         self.use_dynamic_coattention = use_dynamic_coattention
@@ -50,7 +50,8 @@ class BiDAF(nn.Module):
                                         char_vectors=char_vectors,
                                         hidden_size=hidden_size,
                                         drop_prob=drop_prob,
-                                        use_hwy_encoder = use_hwy_encoder)
+                                        use_hwy_encoder = use_hwy_encoder,
+                                        use_2_conv_filters = use_2_conv_filters)
         else:
             self.emb = layers.Embedding(word_vectors=word_vectors,
                                         hidden_size=hidden_size,
