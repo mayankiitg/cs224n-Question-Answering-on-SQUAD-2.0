@@ -739,9 +739,10 @@ class Multihead_Attention(nn.Module):
         self.hidden_dim = hidden_dim
         self.linear_Q = nn.Linear(input_dim, hidden_dim)
         self.linear_K = nn.Linear(input_dim, hidden_dim)
-        self.linear_V = nn.Linear(input_dim, hidden_dim)
+        self.linear_V = nn.Linear(input_dim, input_dim)
         self.num_heads = num_heads
         self.head_size = self.hidden_dim//self.num_heads
+        self.head_size_v = input_dim//self.num_heads
         self.drop_prob = drop_prob
         self.cross = cross
 
@@ -765,7 +766,7 @@ class Multihead_Attention(nn.Module):
             # Split into heads along "embedding"-dimension
             Qpieces = Qr.split(split_size=self.head_size, dim=2) # split the embedding dimension into heads
             Kpieces = Kr.split(split_size=self.head_size, dim=2)
-            Vpieces = Vr.split(split_size=self.head_size, dim=2)
+            Vpieces = Vr.split(split_size=self.head_size_v, dim=2)
 
             # concatenate the pieces/heads along "batch"-dimension
             Qbatched = torch.cat(Qpieces, dim=0)  # (heads*N, T_q, head_size)
@@ -831,7 +832,7 @@ class Multihead_Attention(nn.Module):
             # Split into heads along "embedding"-dimension
             Qpieces = Qr.split(split_size=self.head_size, dim=2) # split the embedding dimension into heads
             Kpieces = Kr.split(split_size=self.head_size, dim=2)
-            Vpieces = Vr.split(split_size=self.head_size, dim=2)
+            Vpieces = Vr.split(split_size=self.head_size_v, dim=2)
 
             # concatenate the pieces/heads along "batch"-dimension
             Qbatched = torch.cat(Qpieces, dim=0)  # (heads*N, T_c, head_size)
@@ -897,7 +898,8 @@ class Attention(nn.Module):
         # self.p_weight1 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         # self.p_weight2 = nn.Parameter(torch.zeros(4*hidden_size, 1))
         self.p2_weight = nn.Parameter(torch.zeros(1, 1, 4*hidden_size))
-        self.multihead_attn = Multihead_Attention(hidden_size, hidden_size, 4, drop_prob=drop_prob, cross=1) # hidden_dim, input_dim=None, num_heads=1, drop_prob=0.2, cross = 1
+        self.multihead_attn = Multihead_Attention(hidden_size, hidden_size, 8, drop_prob=drop_prob, cross=1) # hidden_dim, input_dim=None, num_heads=1, drop_prob=0.2, cross = 1
+        self.multihead_self = Multihead_Attention(hidden_size, 6*hidden_size, 8, drop_prob=drop_prob, cross=0)
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
             nn.init.xavier_uniform_(weight)
         # for weight in (self.p_weight1, self.p_weight2):
@@ -953,8 +955,9 @@ class Attention(nn.Module):
         # ss = self.get_self_similarity_matrix(x) # (bs, c_len, c_len)
         # ss1 = masked_softmax(ss, c_mask, dim=1)
         # patt = torch.bmm(ss1, x)
+        patt = self.multihead_self(x, context_mask = c_mask) + x
 
-        return x
+        return patt
 
     def get_similarity_matrix(self, c, q):
         """Get the "similarity matrix" between context and query (using the
