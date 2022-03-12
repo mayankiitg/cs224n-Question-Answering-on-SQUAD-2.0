@@ -27,6 +27,9 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from ujson import load as json_load
 from util import collate_fn, SQuAD
+from collections import Counter
+from itertools import groupby
+import random
 
 def getModel(word_vectors,
             char_vectors,
@@ -46,15 +49,79 @@ def getModel(word_vectors,
                   use_dynamic_decoder=use_dynamic_decoder)
     return model
 
-def ensemble(log_p1_models, log_p2_models, loss_models, args):
+def weighted_avg(log_p1_models, log_p2_models, weights, args):
+    print('using weighted avg ensemble')
+
+    n_models = log_p1_models.shape[0]
+
+    w = weights.view(1, len(weights))
+    p1, p2 = log_p1_models.exp(), log_p2_models.exp()
+
+    p1_avg = 0
+    p2_avg = 0
+    for i in range(n_models):
+        p1_avg = p1_avg + (weights[i] * p1[i])
+        p2_avg = p2_avg + (weights[i] * p2[i])
+
+    p1 = p1_avg / torch.sum(w)
+    p2 = p2_avg / torch.sum(w)
+
+    p1 = p1/(torch.sum(p1, dim=1).view(-1,1))
+    p2 = p2/(torch.sum(p2, dim=1).view(-1,1))
+
+    starts, ends = util.discretize(p1, p2, args.max_ans_len, args.use_squad_v2)
+    return starts, ends
+
+def majority_voting(log_p1_models, log_p2_models, weights, args):
+    print('using majority voting ensemble')
+
+    n_models = log_p1_models.shape[0]
+    batch_size = log_p1_models.shape[1]
+
+    w = weights.view(1, len(weights))
+    p1, p2 = log_p1_models.exp(), log_p2_models.exp()
+
+    preds = []  # (batch, n_models)
+    for i in range(batch_size):
+        starts, ends = util.discretize(p1[:,i], p2[:,i], args.max_ans_len, args.use_squad_v2)
+        # print(starts.shape, ends.shape) # (n_models, )
+        starts = starts.tolist()
+        ends = ends.tolist()
+
+        tuples = [(starts[i], ends[i]) for i in range(len(starts))] # (n_models) tuples
+
+        preds.append(tuples)
+    
+    # print(preds)
+
+    ans_starts = []
+    ans_ends = []
+    for i in range(batch_size):
+        preds_i = preds[i] # (n_models, 2)
+        # print(preds_i)        
+        # freq = groupby(Counter(preds_i).most_common(), lambda x:x[1])
+        # (st, end) =  random.choice([val for val,count in freq.next()[1]])
+        sorted_ct_tuples = Counter(preds_i).most_common()
+        ans_starts.append(sorted_ct_tuples[0][0][0])
+        ans_ends.append(sorted_ct_tuples[0][0][1])
+
+    # print("answers computed")
+    # print(ans_starts, ans_ends)
+    return torch.tensor(ans_starts), torch.tensor(ans_ends) # (batch, 2)
+
+
+def ensemble(log_p1_models, log_p2_models, f1_scores, ensemble_method, args):
     # Perform ensemble and select starts and end indexes for whole batch, combinging probs from each model.
     # Discretize will be called in this method.
     # shape log_p1_models : (n_models, batch_size, seq_len)
     ans_starts = []
     ans_edns = []
-
+    # print(log_p1_models.shape, log_p2_models.shape)
     n_models = len(log_p1_models)
     batch_size = len(log_p1_models[0])
+
+    f1_scores = torch.tensor(f1_scores)
+
 
 
     # for i in range(batch_size):
@@ -66,17 +133,22 @@ def ensemble(log_p1_models, log_p2_models, loss_models, args):
 
     #     starts, ends = util.discretize(p1, p2, args.max_ans_len, args.use_squad_v2)
 
+    if ensemble_method == 'weighted_avg':
+        return weighted_avg(log_p1_models, log_p2_models, weights=f1_scores, args=args)
+    if ensemble_method == "majority_voting":
+        return majority_voting(log_p1_models, log_p2_models, weights=f1_scores, args=args)
+
+
     # select 1st model for now.
     log_p1 = log_p1_models[0]
     log_p2 = log_p2_models[0]
-    loss = loss_models[0]
     p1, p2 = log_p1.exp(), log_p2.exp()
     starts, ends = util.discretize(p1, p2, args.max_ans_len, args.use_squad_v2)
 
-    return starts, ends, loss
+    return starts, ends
 
 
-def main(args_list):
+def main(args_list, f1_scores, ensemble_method='weighted_avg'):
     
     # common args, pull from first configuration.
     args = args_list[0]
@@ -135,8 +207,8 @@ def main(args_list):
             qw_idxs = qw_idxs.to(device)
             batch_size = cw_idxs.size(0)
 
-            log_p1_models = []
-            log_p2_models = []
+            log_p1_models = torch.tensor([])
+            log_p2_models = torch.tensor([])
             loss_models = []
 
             for model in models:
@@ -191,12 +263,12 @@ def main(args_list):
                     loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
                 
                 # Add the log probs and losses from each model to these lists.
-                log_p1_models.append(log_p1)
-                log_p2_models.append(log_p2)
+                log_p1_models = torch.cat((log_p1_models, log_p1.unsqueeze(0)), dim=0)
+                log_p2_models = torch.cat((log_p2_models, log_p2.unsqueeze(0)), dim=0)
                 loss_models.append(loss)
 
 
-            starts, ends, loss =  ensemble(log_p1_models, log_p2_models, loss_models, args)
+            starts, ends =  ensemble(log_p1_models, log_p2_models, f1_scores=f1_scores, ensemble_method=ensemble_method, args=args)
 
             nll_meter.update(loss.item(), batch_size)
 
@@ -209,6 +281,8 @@ def main(args_list):
             if args.split != 'test':
                 # No labels for the test set, so NLL would be invalid
                 progress_bar.set_postfix(NLL=nll_meter.avg)
+            
+            # print(starts, ends)
 
             idx2pred, uuid2pred = util.convert_tokens(gold_dict,
                                                       ids.tolist(),
@@ -252,7 +326,10 @@ def main(args_list):
 
 
 if __name__ == '__main__':
-    checkpoints = ["save/train/bidaf-char-02/best.pth.tar"]
+    checkpoints = ["save/train/bidaf-char-02/best.pth.tar",
+                  "save/train/bidaf-char-02/best.pth.tar"]
+    f1_scores=[0.6737, 0.6737]
+
     num_models = len(checkpoints)
     args_list = []
     for i in range(num_models):
@@ -264,7 +341,11 @@ if __name__ == '__main__':
             args.use_char_emb = True
             args.use_attention = False
             args.use_dynamic_decoder = False
+        elif i == 1:
+            args.use_char_emb = True
+            args.use_attention = False
+            args.use_dynamic_decoder = False
 
         args_list.append(args)
 
-    main(args_list)
+    main(args_list, f1_scores=f1_scores, ensemble_method='majority_voting')
