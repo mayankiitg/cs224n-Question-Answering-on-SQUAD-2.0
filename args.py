@@ -168,8 +168,8 @@ def get_test_args():
 
     # Require load_path for test.py
     args = parser.parse_args()
-    if not args.load_path:
-        raise argparse.ArgumentError('Missing required argument --load_path')
+    # if not args.load_path:
+    #     raise argparse.ArgumentError('Missing required argument --load_path')
 
     return args
 
@@ -278,3 +278,9 @@ def add_train_test_args(parser):
                 type=bool,
                 default=True,
                 help='Whether use a Dynamic iterative decoder, as mentioned in Co-Attention paper.')
+    parser.add_argument('--fuse_att_mod_iter_dec',
+                type=bool,
+                default=False,
+                help='Whether fuse the att and mod in iterative decoder.')
+
+

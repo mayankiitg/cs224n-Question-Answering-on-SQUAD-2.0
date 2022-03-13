@@ -30,7 +30,7 @@ class BiDAF(nn.Module):
         hidden_size (int): Number of features in the hidden state at each layer.
         drop_prob (float): Dropout probability.
     """
-    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, use_attention, use_dynamic_decoder, use_hwy_encoder, use_multihead, multihead_count, drop_prob=0.,use_2_conv_filters = True):
+    def __init__(self, word_vectors, char_vectors, hidden_size, use_char_emb, use_dynamic_coattention, use_self_attention, use_attention, use_dynamic_decoder, use_hwy_encoder, use_multihead, multihead_count, drop_prob=0.,use_2_conv_filters = True, fuse_att_mod_iter_dec=False):
         super(BiDAF, self).__init__()
         print("initializing Bidaf!")
         self.use_dynamic_coattention = use_dynamic_coattention
@@ -117,7 +117,8 @@ class BiDAF(nn.Module):
                                                     max_decode_steps=4,   # Hyper Param
                                                     maxout_pool_size=4,   # Hyper Param
                                                     older_out_layer=self.out,
-                                                    drop_prob=drop_prob)
+                                                    drop_prob=drop_prob,
+                                                    fuse_att_mod=fuse_att_mod_iter_dec)
 
     def forward(self, cw_idxs, qw_idxs, cc_idxs, qc_idxs):
         # cw_idxs: (max__context_len, )

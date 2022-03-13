@@ -38,7 +38,9 @@ def getModel(word_vectors,
             use_attention,
             use_dynamic_decoder,
             log,
-            use_multihead
+            use_multihead,
+            multihead_count,
+            fuse_att_mod_iter_dec,
             use_2_conv_filters=True,
             ):
     log.info('Building model...')
@@ -50,12 +52,15 @@ def getModel(word_vectors,
                   use_self_attention = False,
                   use_attention = use_attention,
                   use_dynamic_decoder=use_dynamic_decoder,
-                  use_multihead=use_multihead
-                  use_2_conv_filters=use_2_conv_filters)
+                  use_multihead=use_multihead,
+                  use_2_conv_filters=use_2_conv_filters,
+                  use_hwy_encoder=True,
+                  multihead_count=multihead_count,
+                  fuse_att_mod_iter_dec = fuse_att_mod_iter_dec)
     return model
 
 def weighted_avg(log_p1_models, log_p2_models, weights, args):
-    print('using weighted avg ensemble')
+    # print('using weighted avg ensemble')
 
     n_models = log_p1_models.shape[0]
 
@@ -78,7 +83,7 @@ def weighted_avg(log_p1_models, log_p2_models, weights, args):
     return starts, ends
 
 def majority_voting(log_p1_models, log_p2_models, weights, args):
-    print('using majority voting ensemble')
+    # print('using majority voting ensemble')
 
     n_models = log_p1_models.shape[0]
     batch_size = log_p1_models.shape[1]
@@ -104,15 +109,18 @@ def majority_voting(log_p1_models, log_p2_models, weights, args):
     for i in range(batch_size):
         preds_i = preds[i] # (n_models, 2)
         # print(preds_i)        
-        sorted_ct_tuples = Counter(preds_i).most_common()
-        # max_freq = sorted_ct_tuples[0][1]
-        # ans_choices = [span for span,ct in sorted_ct_tuples if ct == max_freq]
-        # ans = random.choice(ans_choices)
-        # ans_starts.append(ans[0])
-        # ans_ends.append(ans[1])
         
-        ans_starts.append(sorted_ct_tuples[0][0][0])
-        ans_ends.append(sorted_ct_tuples[0][0][1])
+        sorted_ct_tuples = Counter(preds_i).most_common()
+        # ans_starts.append(sorted_ct_tuples[0][0][0])
+        # ans_ends.append(sorted_ct_tuples[0][0][1])
+
+        max_freq = sorted_ct_tuples[0][1]
+        ans_choices = [span for span,ct in sorted_ct_tuples if ct == max_freq]
+        ans = random.choice(ans_choices)
+        ans_starts.append(ans[0])
+        ans_ends.append(ans[1])
+        
+        
 
 
     # print("answers computed")
@@ -188,7 +196,9 @@ def main(args_list, f1_scores, ensemble_method='weighted_avg'):
                     use_dynamic_decoder=args_model.use_dynamic_decoder,
                     log=log,
                     use_multihead=args_model.use_multihead,
-                    use_2_conv_filters=use_2_conv_filters)
+                    use_2_conv_filters=use_2_conv_filters,
+                    multihead_count = args_model.multihead_count,
+                    fuse_att_mod_iter_dec = args_model.fuse_att_mod_iter_dec)
 
         model = nn.DataParallel(model, gpu_ids)
         log.info(f'Loading checkpoint from {args_model.load_path}...')
@@ -347,13 +357,19 @@ if __name__ == '__main__':
                   "save/train/bestModel-const-lr-01/best.pth.tar",
                   "save/train/bidaf-baseline-03/best.pth.tar", 
                   "save/train/samidh-best-model-1/best.pth.tar",
-                  #"save/train/samidh-CoAttMultih-05/best.pth.tar",
+                  "save/train/samidh-multiheadCoAtt-04/best.pth.tar",
+                  "save/train/samidh-8head-self02/best.pth.tar",
+                  "save/train/bidaf-char-02-05/best.pth.tar",
+                  "save/train/samidh-CoAttMultih-05/best.pth.tar",
+                  "save/train/BestModelIterativeDecImproved-01/best.pth.tar",
                   ]
 
-    f1_scores=[0.6737, 0.6774, 61.29, 68.27]
+    f1_scores=[0.6737, 0.6774, 0.6129, 0.6827, 0.688, 0.6881, 0.6731, 0.6827, 0.6557]
 
     num_models = len(checkpoints)
     args_list = []
+    # multihead_count, use_self_attention
+    # 
     for i in range(num_models):
         args = get_test_args()
         args.load_path = checkpoints[i]
@@ -379,11 +395,32 @@ if __name__ == '__main__':
         elif i == 4:
             args.use_char_emb = True
             args.use_attention = True
+            args.use_self_attention = True
             args.use_dynamic_decoder = False
             args.use_multihead = True
+            args.multihead_count = 4
+        elif i == 5:
+            args.use_char_emb = True
+            args.use_attention = True
+            args.use_self_attention = True
+            args.use_dynamic_decoder = False
+            args.use_multihead = True
+            args.multihead_count = 8
+        elif i == 6:
+            args.use_char_emb = True
+            args.use_attention = False
+            args.use_self_attention = False
+            args.use_dynamic_decoder = False
+        elif i == 7:
+            args.use_char_emb = True
+            args.use_attention = True
+        elif i == 8:
+            args.use_dynamic_decoder = True
             
         args_list.append(args)
 
-    # args_list = args_list[:3]
-    # f1_scores = f1_scores[:3]
-    main(args_list, f1_scores=f1_scores, ensemble_method='majority_voting') # majority_voting
+    args_list = [args_list[i] for i in [0,1,2,3,4,5,6,7,8]]
+    f1_scores = [f1_scores[i] for i in [0,1,2,3,4,5,6,7,8]]
+    # ensemble_method = 'majority_voting'
+    ensemble_method = 'weighted_avg'
+    main(args_list, f1_scores=f1_scores, ensemble_method=ensemble_method) # majority_voting
