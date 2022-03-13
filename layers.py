@@ -55,7 +55,7 @@ class WordAndCharEmbedding(nn.Module):
         self.drop_prob = drop_prob
         self.word_embed = nn.Embedding.from_pretrained(word_vectors)
         self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob, use_2_conv_filters=use_2_conv_filters)
-        self.proj = nn.Linear(word_vectors.size(1)+2*n_filters, hidden_size, bias=False)
+        self.proj = nn.Linear(word_vectors.size(1)+(1+use_2_conv_filters)*n_filters, hidden_size, bias=False)
         self.hwy = HighwayEncoder(2, hidden_size)
 
     def forward(self, word_idxs, char_idxs):
@@ -1144,7 +1144,7 @@ class IterativeDecoderOutput(nn.Module):
         hidden_size (int): Hidden size used in the BiDAF model.
         drop_prob (float): Probability of zero-ing out activations.
     """
-    def __init__(self, hidden_size, att_out_dim, mod_out_dim, max_decode_steps, maxout_pool_size, older_out_layer, drop_prob):
+    def __init__(self, hidden_size, att_out_dim, mod_out_dim, max_decode_steps, maxout_pool_size, older_out_layer, drop_prob, fuse_att_mod=False):
         super().__init__()
         self.max_decode_steps = max_decode_steps
         self.att_out_dim = att_out_dim
@@ -1152,7 +1152,7 @@ class IterativeDecoderOutput(nn.Module):
         self.mod_out_dim = mod_out_dim
 
         ## Either enable or disable this.
-        self.fuse_att_mod = False
+        self.fuse_att_mod = fuse_att_mod
 
         if self.fuse_att_mod:
             self.att_mod_proj = nn.Linear(self.mod_out_dim + self.att_out_dim, self.mod_out_dim)
@@ -1160,6 +1160,7 @@ class IterativeDecoderOutput(nn.Module):
 
         # input to RNN will be: [u_s_i-1 ; u_e_i-1]
         # self.decoder = RNNEncoder(2 * mod_out_dim, hidden_size, 1, drop_prob=drop_prob, bidirectional=False)
+        self.olderDecoder = older_out_layer
         self.decoder = nn.LSTMCell(2 * mod_out_dim, hidden_size, bias=True)
 
         # some people forget the biases, and initialize lstm with that.
