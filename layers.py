@@ -904,8 +904,8 @@ class Attention(nn.Module):
         # self.linear2 = nn.Linear(hidden_size, hidden_size)
         self.c_weight = nn.Parameter(torch.zeros(hidden_size, 1))
         self.q_weight = nn.Parameter(torch.zeros(hidden_size, 1))
-        self.p_weight1 = nn.Parameter(torch.zeros(6*hidden_size, int(np.sqrt(hidden_size))))
-        self.p_weight2 = nn.Parameter(torch.zeros(6*hidden_size, int(np.sqrt(hidden_size))))
+        # self.p_weight1 = nn.Parameter(torch.zeros(6*hidden_size, int(np.sqrt(hidden_size))))
+        # self.p_weight2 = nn.Parameter(torch.zeros(6*hidden_size, int(np.sqrt(hidden_size))))
         self.cq_weight = nn.Parameter(torch.zeros(1, 1, hidden_size))
         self.bias = nn.Parameter(torch.zeros(1))
         for weight in (self.c_weight, self.q_weight, self.cq_weight):
@@ -1161,7 +1161,7 @@ class IterativeDecoderOutput(nn.Module):
             self.att_mod_proj = nn.Linear(self.mod_out_dim + self.att_out_dim, self.mod_out_dim)
             # self.mod_out_dim = self.mod_out_dim + self.att_out_dim
 
-        # input to RNN will be: [u_s_i-1 ; u_e_i-1] 
+        # input to RNN will be: [u_s_i-1 ; u_e_i-1]
         # self.decoder = RNNEncoder(2 * mod_out_dim, hidden_size, 1, drop_prob=drop_prob, bidirectional=False)
         self.decoder = nn.LSTMCell(2 * mod_out_dim, hidden_size, bias=True)
 
@@ -1176,7 +1176,7 @@ class IterativeDecoderOutput(nn.Module):
         # att:  (batch_size, seq_len, att_enc_size)
         # mod:  (batch_size, seq_len, mod_out_size)
         # mask: (batch_size, seq_len)
-        
+
         # if self.fuse_att_mod:
         #     mod = torch.cat((mod, att), dim=2)
 
