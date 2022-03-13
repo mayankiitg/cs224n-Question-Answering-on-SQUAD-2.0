@@ -55,7 +55,7 @@ class WordAndCharEmbedding(nn.Module):
         self.drop_prob = drop_prob
         self.use_hwy_encoder = use_hwy_encoder
         self.word_embed = nn.Embedding.from_pretrained(word_vectors)
-        self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob)
+        self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob, use_2_conv_filters=use_2_conv_filters)
         self.proj = nn.Linear(word_vectors.size(1)+2*n_filters, hidden_size, bias=False)
         if use_hwy_encoder:
             self.hwy = HighwayEncoder(2, hidden_size)
@@ -967,10 +967,10 @@ class Attention(nn.Module):
         #scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
         #scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
-        acoat = torch.bmm(scoat1, qprime)
+        # acoat = torch.bmm(scoat1, qprime)
         # (bs, q_len, c_len) x (bs, c_len, hid_size) => (bs, q_len, hid_size)
-        bcoat = torch.bmm(scoat2.transpose(1, 2), c)
-        scoat = torch.bmm(scoat1, bcoat)
+        # bcoat = torch.bmm(scoat2.transpose(1, 2), c)
+        # scoat = torch.bmm(scoat1, bcoat)
 
         # BiDAF
         # print("c.shape, a.shape, scoat3.shape, acoat.shape = ", c.shape, a.shape, scoat3.shape, acoat.shape)

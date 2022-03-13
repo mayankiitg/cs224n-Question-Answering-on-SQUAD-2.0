@@ -91,9 +91,6 @@ def main(args):
             log_p1, log_p2 = model(cw_idxs, qw_idxs, cc_idxs, qc_idxs)
             y1, y2 = y1.to(device), y2.to(device)
 
-            log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
-            log_p2 = log_p2[:,-1,:]
-
             st_idx_i_1 = None
             end_idx_i_1 = None
             curr_mask_1 = None
