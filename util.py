@@ -343,6 +343,8 @@ def load_model(model, checkpoint_path, gpu_ids, return_step=True):
     model_dict.update(ckpt_dict_cut)
     model.load_state_dict(model_dict)
 
+    # model.load_state_dict(ckpt_dict['model_state'])
+
     if return_step:
         step = 0 #ckpt_dict['step']
         return model, step

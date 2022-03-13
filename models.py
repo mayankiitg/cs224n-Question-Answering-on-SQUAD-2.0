@@ -50,7 +50,6 @@ class BiDAF(nn.Module):
                                         char_vectors=char_vectors,
                                         hidden_size=hidden_size,
                                         drop_prob=drop_prob,
-                                        use_hwy_encoder = use_hwy_encoder,
                                         use_2_conv_filters = use_2_conv_filters)
         else:
             self.emb = layers.Embedding(word_vectors=word_vectors,

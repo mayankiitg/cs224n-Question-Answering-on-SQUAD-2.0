@@ -49,16 +49,14 @@ class WordAndCharEmbedding(nn.Module):
         hidden_size (int): Size of hidden activations.
         drop_prob (float): Probability of zero-ing out activations
     """
-    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob, use_hwy_encoder=False, use_2_conv_filters = True):
+    def __init__(self, word_vectors, char_vectors, hidden_size, drop_prob, use_2_conv_filters = True):
         super(WordAndCharEmbedding, self).__init__()
         n_filters = hidden_size
         self.drop_prob = drop_prob
-        self.use_hwy_encoder = use_hwy_encoder
         self.word_embed = nn.Embedding.from_pretrained(word_vectors)
-        self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob)
+        self.char_embed = CharEmbedding(char_vectors, n_filters=n_filters, kernel_size=3, drop_prob=drop_prob, use_2_conv_filters=use_2_conv_filters)
         self.proj = nn.Linear(word_vectors.size(1)+2*n_filters, hidden_size, bias=False)
-        if use_hwy_encoder:
-            self.hwy = HighwayEncoder(2, hidden_size)
+        self.hwy = HighwayEncoder(2, hidden_size)
 
     def forward(self, word_idxs, char_idxs):
         word_emb = self.word_embed(word_idxs)   # (batch_size, seq_len, embed_size)
@@ -71,12 +69,11 @@ class WordAndCharEmbedding(nn.Module):
         emb = torch.cat((word_emb, char_emb), dim=2)  # (batch_size, seq_len, 350)
         assert(emb.size()[2] == word_emb.size()[2] + char_emb.size()[2])
 
-        if self.use_hwy_encoder:
-            emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
+        emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
 
         # emb = F.dropout(emb, self.drop_prob, self.training) # ToDo: Should we apply dropout collectively here?
 
-        # emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
+        emb = self.hwy(emb)   # (batch_size, seq_len, hidden_size)
 
         return emb
 
@@ -944,8 +941,8 @@ class Attention(nn.Module):
         if self.use_multihead:
             acoat, bcoat, scoat3 = self.multihead_attn(c, q, c_mask, q_mask) # Context, Question=None, context_mask=None, question_mask=None -> similarity, context_weights, question_weights, context_att, question_att
         else:
-            qprime1 = F.ReLU(self.linear1(q))
-            qprime = F.ReLU(self.linear2(qprime1))
+            qprime1 = F.relu(self.linear1(q))
+            qprime = F.relu(self.linear2(qprime1))
             scoat = torch.matmul(c , qprime.transpose(1, 2))
             scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
             scoat2 = masked_softmax(scoat, c_mask, dim=1)
@@ -967,10 +964,10 @@ class Attention(nn.Module):
         #scoat1 = masked_softmax(scoat, q_mask, dim=2)       # (batch_size, c_len, q_len)
         #scoat2 = masked_softmax(scoat, c_mask, dim=1)       # (batch_size, c_len, q_len)
         # (bs, c_len, q_len) x (bs, q_len, hid_size) => (bs, c_len, hid_size)
-        acoat = torch.bmm(scoat1, qprime)
+        # acoat = torch.bmm(scoat1, qprime)
         # (bs, q_len, c_len) x (bs, c_len, hid_size) => (bs, q_len, hid_size)
-        bcoat = torch.bmm(scoat2.transpose(1, 2), c)
-        scoat = torch.bmm(scoat1, bcoat)
+        # bcoat = torch.bmm(scoat2.transpose(1, 2), c)
+        # scoat = torch.bmm(scoat1, bcoat)
 
         # BiDAF
         # print("c.shape, a.shape, scoat3.shape, acoat.shape = ", c.shape, a.shape, scoat3.shape, acoat.shape)
