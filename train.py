@@ -131,8 +131,8 @@ def main(args):
                 log_p1, log_p2 = model(cw_idxs, qw_idxs, cc_idxs, qc_idxs)
                 y1, y2 = y1.to(device), y2.to(device)
 
-                loss = 0
-                loss_val = 0
+                #loss = 0
+                #loss_val = 0
 
                 # log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
                 # log_p2 = log_p2[:,-1,:]
@@ -180,6 +180,10 @@ def main(args):
                     log_p1 = log_p1[:,-1,:] # take prob of last iteration for EM, F1 scores and predictions.
                     log_p2 = log_p2[:,-1,:]
                 else:
+                    log_p1 = log_p1[1:]
+                    log_p2 = log_p2[1:]
+                    y1 = y1[1:]
+                    y2 = y2[1:]
                     loss = F.nll_loss(log_p1, y1) + F.nll_loss(log_p2, y2)
 
                 loss_val = loss.item()
